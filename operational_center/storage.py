@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from .domain import now, uid, validate_config, new_master
@@ -140,7 +141,7 @@ class Store:
         with target.open("xb"):
             pass
         try:
-            with sqlite3.connect(target) as db:
+            with closing(sqlite3.connect(target)) as db:
                 self.db.backup(db)
         except Exception:
             target.unlink(missing_ok=True)
@@ -153,7 +154,7 @@ class Store:
             raise ValueError("Выберите существующую резервную копию")
         # Read-only validation before touching current data.
         uri = candidate.resolve().as_uri() + "?mode=ro"
-        with sqlite3.connect(uri, uri=True) as db:
+        with closing(sqlite3.connect(uri, uri=True)) as db:
             if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise ValueError("Резервная копия повреждена")
             if db.execute("PRAGMA user_version").fetchone()[0] != self.SCHEMA:
@@ -163,7 +164,7 @@ class Store:
             for row in db.execute("SELECT snapshot,state FROM events"):
                 json.loads(row[0]); json.loads(row[1])
         before = self.backup(self.path.parent / "backups" / f"before-restore-{uid()}.sqlite")
-        with sqlite3.connect(uri, uri=True) as source_db:
+        with closing(sqlite3.connect(uri, uri=True)) as source_db:
             source_db.backup(self.db)
         return before
 

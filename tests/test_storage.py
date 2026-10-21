@@ -79,6 +79,17 @@ def test_invalid_backup_leaves_current_database(store, configured, tmp_path):
     assert len(store.events()) == 1
 
 
+def test_backup_and_restore_release_backup_file_handles(store, configured, tmp_path):
+    backup = tmp_path / "releasable.sqlite"
+    store.backup(backup)
+    moved = tmp_path / "moved.sqlite"
+    backup.rename(moved)
+    store.restore(moved)
+    # On Windows this fails if either validation or backup connections leak.
+    moved.unlink()
+    assert not moved.exists()
+
+
 def test_schema_newer_than_app_never_modified(tmp_path):
     path = tmp_path / "future.sqlite"
     with sqlite3.connect(path) as db:
