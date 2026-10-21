@@ -7,20 +7,29 @@ import sys
 from pathlib import Path
 
 
+def checked_run(command, logfile, timeout=None):
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    Path(logfile).write_text(result.stdout, encoding="utf-8")
+    print(result.stdout, end="")
+    result.check_returncode()
+
+
 def build():
     if sys.platform != "win32":
         raise SystemExit("Windows packaging must run on Windows")
     root = Path(__file__).resolve().parents[1]
     os.chdir(root)
     commit = os.environ.get("GITHUB_SHA", "local")
+    (root / "artifacts").mkdir(exist_ok=True)
     (root / "operational_center" / "build.json").write_text(json.dumps({"commit": commit}), encoding="utf-8")
-    subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "OperationalCenter",
+    checked_run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "OperationalCenter",
                     "--add-data", "operational_center/qml;operational_center/qml", "--add-data", "operational_center/build.json;operational_center",
-                    "--hidden-import", "PySide6.QtQuick", "--hidden-import", "PySide6.QtQml", "main.py"], check=True)
+                    "--hidden-import", "PySide6.QtQuick", "--hidden-import", "PySide6.QtQml", "main.py"], root / "artifacts" / "build-output.txt")
     folder = root / "dist" / "OperationalCenter"
     report = root / "artifacts" / "packaged-smoke.json"
     report.parent.mkdir(exist_ok=True)
-    subprocess.run([str(folder / "OperationalCenter.exe"), "--smoke-test", "--smoke-report", str(report)], check=True, timeout=60)
+    checked_run([str(folder / "OperationalCenter.exe"), "--smoke-test", "--smoke-report", str(report)], root / "artifacts" / "packaged-output.txt", timeout=60)
     result = json.loads(report.read_text(encoding="utf-8"))
     if not result["ok"] or len(result["checks"]) != 9 or result["qml_errors"]:
         raise RuntimeError("Packaged application failed functional QML smoke-test")

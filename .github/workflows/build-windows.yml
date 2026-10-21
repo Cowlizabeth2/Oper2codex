@@ -87,7 +87,7 @@ jobs:
             const root = process.env.OPER_BUILD_ROOT;
             if (!root) return;
             const report = {commit: context.sha, run_id: context.runId, files: {}};
-            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'packaged-smoke.json']) {
+            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'packaged-smoke.json', 'build-output.txt', 'packaged-output.txt']) {
               const source = path.join(root, 'artifacts', name);
               if (fs.existsSync(source)) report.files[name] = fs.readFileSync(source, 'utf8').slice(0, 250000);
             }
