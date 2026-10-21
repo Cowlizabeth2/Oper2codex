@@ -64,7 +64,7 @@ def test_reference_multiselect_persists_file_objects(app, store, tmp_path):
     run(c, "publish"); run(c, "create_event", id=c.selected_master)
     c.selectFiles(block["id"], json.dumps([str(one), str(two)]))
     run(c, "copy_files", id=block["id"])
-    assert [u.toLocalFile() for u in app.clipboard().mimeData().urls()] == [str(one), str(two)]
+    assert [Path(u.toLocalFile()) for u in app.clipboard().mimeData().urls()] == [one, two]
     assert store.event(c.active)["state"][block["id"]]["selected"] == [str(one), str(two)]
 
 

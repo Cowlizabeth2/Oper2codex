@@ -28,6 +28,7 @@ def test_real_mouse_drag_resize_and_window_resize_preserve_coordinates(app, stor
     engine.load(QUrl.fromLocalFile(str(Path(__file__).resolve().parents[1] / "operational_center" / "qml" / "Main.qml")))
     assert engine.rootObjects()
     root = engine.rootObjects()[0]
+    root.setPosition(0, 0)
     root.resize(1480, 940)
     root.setProperty("page", "builder")
     QTest.qWait(150)
@@ -43,13 +44,19 @@ def test_real_mouse_drag_resize_and_window_resize_preserve_coordinates(app, stor
         QTest.qWait(100)
         moved = c.state["master"]["blocks"][0].copy()
         assert moved["x"] > before["x"] and moved["y"] > before["y"]
-        # Move the viewport's scrollbars if needed by making a wider window.
-        root.resize(1900, 1100)
+        # Native Windows mouse events must stay on the actual desktop, even
+        # when the test window exceeds the runner's display. Scroll the grip
+        # into view rather than injecting a click outside the screen.
+        viewport = visual_child(root.contentItem(), "builderViewport")
+        flickable = viewport.property("contentItem")
+        flickable.setProperty("contentX", max(0, moved["x"] + moved["width"] - 380))
+        flickable.setProperty("contentY", max(0, moved["y"] + moved["height"] - 220))
         QTest.qWait(100)
         handle = visual_child(root.contentItem(), "resizeHandle-" + identity)
         assert handle is not None
         start = handle.mapToScene(QPointF(10, 10)).toPoint()
         QTest.mousePress(root, Qt.LeftButton, Qt.NoModifier, start)
+        QTest.mouseMove(root, start + QPoint(20, 20), 30)
         QTest.mouseMove(root, start + QPoint(60, 50), 30)
         QTest.mouseRelease(root, Qt.LeftButton, Qt.NoModifier, start + QPoint(60, 50))
         QTest.qWait(100)

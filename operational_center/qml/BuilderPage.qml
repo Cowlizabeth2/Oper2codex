@@ -44,6 +44,7 @@ ColumnLayout {
         spacing: 12
         ScrollView {
             id: viewport
+            objectName: "builderViewport"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -125,6 +126,7 @@ ColumnLayout {
                             Label { anchors.fill: parent; anchors.margins: 14; text: tile.modelData.title + "  ⠿"; color: Theme.text; elide: Text.ElideRight; font.bold: true }
                             MouseArea {
                                 objectName: "dragHandle-" + tile.modelData.id
+                                preventStealing: true
                                 anchors.fill: parent
                                 cursorShape: Qt.SizeAllCursor
                                 drag.target: tile
@@ -147,6 +149,7 @@ ColumnLayout {
                             Label { anchors.centerIn: parent; text: "◢"; color: Theme.accent }
                             MouseArea {
                                 objectName: "resizeHandle-" + tile.modelData.id
+                                preventStealing: true
                                 anchors.fill: parent
                                 cursorShape: Qt.SizeFDiagCursor
                                 property point start
