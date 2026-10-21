@@ -38,6 +38,15 @@ jobs:
           Set-Location $env:OPER_BUILD_ROOT
           python -m pytest -q --junitxml=artifacts/tests.xml
           exit $LASTEXITCODE
+      - name: Summarize Windows test results
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:OPER_BUILD_ROOT/tools/report_tests.py") {
+            Set-Location $env:OPER_BUILD_ROOT
+            python tools/report_tests.py
+            exit $LASTEXITCODE
+          }
       - name: Load all QML pages and block editors
         shell: pwsh
         run: |
