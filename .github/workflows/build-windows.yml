@@ -8,6 +8,8 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     timeout-minutes: 30
     env:
       QT_QUICK_BACKEND: software
@@ -36,7 +38,7 @@ jobs:
         shell: pwsh
         run: |
           Set-Location $env:OPER_BUILD_ROOT
-          python -m pytest -q --junitxml=artifacts/tests.xml
+          python tools/run_tests.py
           exit $LASTEXITCODE
       - name: Summarize Windows test results
         if: always()
@@ -67,6 +69,7 @@ jobs:
           path: |
             ${{ env.OPER_BUILD_ROOT }}/artifacts/*.json
             ${{ env.OPER_BUILD_ROOT }}/artifacts/*.xml
+            ${{ env.OPER_BUILD_ROOT }}/artifacts/*.txt
           if-no-files-found: ignore
       - name: Upload tested Windows package
         uses: actions/upload-artifact@v4
@@ -74,3 +77,33 @@ jobs:
           name: OperationalCenter-Windows
           path: ${{ env.OPER_BUILD_ROOT }}/artifacts/OperationalCenter-Windows.zip
           if-no-files-found: error
+      - name: Save machine-readable build report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const root = process.env.OPER_BUILD_ROOT;
+            if (!root) return;
+            const report = {commit: context.sha, run_id: context.runId, files: {}};
+            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'packaged-smoke.json']) {
+              const source = path.join(root, 'artifacts', name);
+              if (fs.existsSync(source)) report.files[name] = fs.readFileSync(source, 'utf8').slice(0, 250000);
+            }
+            const owner = context.repo.owner, repo = context.repo.repo;
+            const branch = 'ci-diagnostics', file = 'ci-diagnostics/latest.json';
+            try {
+              await github.rest.git.getRef({owner, repo, ref: 'heads/' + branch});
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.git.createRef({owner, repo, ref: 'refs/heads/' + branch, sha: context.sha});
+            }
+            let sha;
+            try {
+              const current = await github.rest.repos.getContent({owner, repo, path: file, ref: branch});
+              sha = current.data.sha;
+            } catch (error) { if (error.status !== 404) throw error; }
+            await github.rest.repos.createOrUpdateFileContents({owner, repo, path: file, branch, sha,
+              message: 'Record Windows build diagnostics for ' + context.sha.slice(0, 8),
+              content: Buffer.from(JSON.stringify(report, null, 2)).toString('base64')});
