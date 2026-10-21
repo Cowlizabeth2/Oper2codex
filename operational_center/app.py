@@ -168,5 +168,7 @@ def main(argv=None):
         sys.excepthook = previous_hook
         faulthandler.disable()
         crash_stream.close()
+        # Windows refuses to remove open diagnostic files in a smoke workspace.
+        logging.shutdown()
         if temporary:
             temporary.cleanup()
