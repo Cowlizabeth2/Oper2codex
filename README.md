@@ -4,6 +4,8 @@
 
 Это первая реализация по [техническому заданию](docs/TECHNICAL_SPEC.md). Реальные результаты проверок и ограничения приведены в [VALIDATION.md](docs/VALIDATION.md). Наличие workflow не означает, что Windows-сборка уже проверена.
 
+Подтверждённая [Windows-сборка 4674b65](https://github.com/Cowlizabeth2/Oper2codex/actions/runs/39664424157): 43 теста пройдены, исходный и упакованный EXE проходят функциональную проверку QML с кодом 0. Пакет доступен в Artifacts → OperationalCenter-Windows. Word/Excel, вставка в рабочие мессенджеры и целевой Windows 10/11 требуют ручной приёмки.
+
 ## Запуск из исходников
 
 ```sh
