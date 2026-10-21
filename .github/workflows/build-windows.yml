@@ -1,0 +1,67 @@
+name: Build Windows
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QUICK_BACKEND: software
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate and extract source bundle
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP "oper-build"
+          python tools/validate_bundle.py source_bundle.zip $work
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "OPER_BUILD_ROOT=$work" >> $env:GITHUB_ENV
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          Set-Location $env:OPER_BUILD_ROOT
+          python -m pip install -r requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip check
+          exit $LASTEXITCODE
+      - name: Test services and native Windows clipboard
+        shell: pwsh
+        run: |
+          Set-Location $env:OPER_BUILD_ROOT
+          python -m pytest -q --junitxml=artifacts/tests.xml
+          exit $LASTEXITCODE
+      - name: Load all QML pages and block editors
+        shell: pwsh
+        run: |
+          Set-Location $env:OPER_BUILD_ROOT
+          python main.py --smoke-test --smoke-report artifacts/source-smoke.json
+          exit $LASTEXITCODE
+      - name: Build and smoke-test packaged application
+        shell: pwsh
+        run: |
+          Set-Location $env:OPER_BUILD_ROOT
+          python tools/build_windows.py
+          exit $LASTEXITCODE
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            ${{ env.OPER_BUILD_ROOT }}/artifacts/*.json
+            ${{ env.OPER_BUILD_ROOT }}/artifacts/*.xml
+          if-no-files-found: ignore
+      - name: Upload tested Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OperationalCenter-Windows
+          path: ${{ env.OPER_BUILD_ROOT }}/artifacts/OperationalCenter-Windows.zip
+          if-no-files-found: error
