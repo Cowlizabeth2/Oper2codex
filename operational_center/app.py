@@ -29,10 +29,21 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Оперативный центр")
     parser.add_argument("--data-dir", type=Path)
     parser.add_argument("--smoke-test", action="store_true")
+    parser.add_argument('--upgrade-test',action='store_true')
+    parser.add_argument('--upgrade-manifest',type=Path)
+    parser.add_argument('--upgrade-phase',choices=['apply','verify'],default='apply')
+    parser.add_argument('--upgrade-output',type=Path)
     parser.add_argument("--smoke-report", type=Path)
     parser.add_argument("--screenshot", type=Path)
     parser.add_argument("--screenshot-page", default="home", choices=["home", "builder", "events"])
     args = parser.parse_args(argv)
+    upgrade_manifest=None
+    if args.upgrade_test:
+        if args.smoke_test or not args.data_dir or not args.upgrade_manifest or not args.upgrade_output:
+            parser.error('Upgrade test requires an explicit synthetic data dir, manifest and output')
+        from .upgrade_check import guard
+        upgrade_manifest=guard(args.data_dir,args.upgrade_manifest,args.upgrade_phase)
+    checking=args.smoke_test or args.upgrade_test
     # Smoke tests NEVER open or migrate the user's database.
     temporary = tempfile.TemporaryDirectory(prefix="oper-smoke-") if args.smoke_test else None
     data_dir = Path(temporary.name) if temporary else (args.data_dir or default_data_dir())
@@ -47,7 +58,7 @@ def main(argv=None):
 
     def unhandled(exc_type, value, traceback):
         logging.critical("Необработанное исключение", exc_info=(exc_type, value, traceback))
-        if args.smoke_test:
+        if checking:
             app.exit(4)
         else:
             QMessageBox.critical(None, "Ошибка приложения", f"{value}\n\nПодробности: {startup}")
@@ -80,6 +91,18 @@ def main(argv=None):
             raise RuntimeError("Не удалось загрузить интерфейс QML")
         root = engine.rootObjects()[0]
         smoke_steps = []
+        if args.upgrade_test:
+            def upgrade_run():
+                try:
+                    from .upgrade_check import run
+                    result['upgrade']=run(backend,root,upgrade_manifest,args.upgrade_phase,data_dir,args.upgrade_output)
+                    result['ok']=not qml_errors
+                    app.exit(0 if result['ok'] else 2)
+                except Exception as exc:
+                    logging.exception('Packaged upgrade test failed')
+                    result['error']=str(exc);app.exit(2)
+            QTimer.singleShot(200,upgrade_run)
+            QTimer.singleShot(90000,lambda:app.exit(3))
         if args.smoke_test:
             # Exercise all QML pages and each functional block using temporary data.
             from .domain import new_block, field
@@ -172,14 +195,14 @@ def main(argv=None):
         # Destroy the engine while context properties still exist.
         del root
         del engine
-        if args.smoke_test:
+        if checking:
             result["ok"] = code == 0 and not qml_errors
             logging.info("SMOKE_RESULT %s", json.dumps(result, ensure_ascii=False))
         return code
     except Exception as exc:
         logging.exception("Ошибка запуска")
         result["error"] = str(exc)
-        if not args.smoke_test:
+        if not checking:
             QMessageBox.critical(None, "Ошибка запуска — Оперативный центр", f"{exc}\n\nДиагностика: {startup}")
         return 1
     finally:

@@ -42,6 +42,7 @@ class Controller(QObject):
         self.import_proposal = None
         self.import_token = ""
         self.template_diagnostics = None
+        self.template_diagnostic_block = ''
         self.template_plan = None
         self.template_plan_token = ""
         self.template_migration_result = None
@@ -140,14 +141,15 @@ class Controller(QObject):
 
     def _command(self, action, a):
         if action == 'inspect_templates':
-            self.template_diagnostics = template_migration.inspect(self.store)
+            self.template_diagnostic_block=a.get('block_id','')
+            self.template_diagnostics = template_migration.inspect(self.store,self.template_diagnostic_block)
             self.template_plan = None
             self.template_plan_token = ''
             self.template_migration_result = None
         elif action == 'preview_template_migration':
             self.template_plan = None
             self.template_plan_token = ''
-            self.template_plan = template_migration.prepare(self.store,a['block_id'],a['field_id'],a['prefix'])
+            self.template_plan = template_migration.prepare(self.store,a['block_id'],a['field_id'],a['prefix'],a.get('source_property','default'))
             self.template_plan_token = uid()
         elif action == 'cancel_template_migration':
             self.template_plan = None
@@ -159,7 +161,7 @@ class Controller(QObject):
             self.template_plan = None
             self.template_plan_token = ''
             self.undo_stack.clear(); self.redo_stack.clear()
-            self.template_diagnostics = template_migration.inspect(self.store)
+            self.template_diagnostics = template_migration.inspect(self.store,self.template_diagnostic_block)
             self.notice.emit('Преобразование подтверждённых записей завершено. Резервная копия: '+self.template_migration_result['backup'])
         elif action in {"create_event", "launch_catalog"}:
             if action == "launch_catalog" and a.get("catalog"):
@@ -316,6 +318,9 @@ class Controller(QObject):
                     master["links"].append(a["id"])
             self.change_draft(toggle)
         elif action == "save_block":
+            original=self.block(self.store.config('draft')[1],a['id'])
+            if original['type']=='text' and original['config']!=a['config']:
+                self.store.backup(self.data_dir/'backups'/f'before-template-edit-{uid()}.sqlite')
             def save(c):
                 self.block(c, a["id"]).update(title=a["title"], config=a["config"])
                 if "accent" in a:

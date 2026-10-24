@@ -117,7 +117,7 @@ jobs:
           Set-Location $env:OPER_BUILD_ROOT
           python tools/review_template_migration.py
           exit $LASTEXITCODE
-      - name: Build and smoke-test packaged application
+      - name: Build EXE, upgrade precreated legacy SQLite and reopen it
         shell: pwsh
         run: |
           Set-Location $env:OPER_BUILD_ROOT
@@ -152,6 +152,7 @@ jobs:
             ${{ env.OPER_BUILD_ROOT }}/artifacts/text-layout/
             ${{ env.OPER_BUILD_ROOT }}/artifacts/text-layout-125/
             ${{ env.OPER_BUILD_ROOT }}/artifacts/template-upgrade/
+            ${{ env.OPER_BUILD_ROOT }}/artifacts/exe-upgrade/
           if-no-files-found: ignore
       - name: Save machine-readable build report
         if: always()
@@ -163,7 +164,7 @@ jobs:
             const root = process.env.OPER_BUILD_ROOT;
             if (!root) return;
             const report = {commit: context.sha, run_id: context.runId, files: {}};
-            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'source-output.txt', 'source-exit-code.txt', 'packaged-smoke.json', 'build-output.txt', 'packaged-output.txt', 'visual/report.json', 'visual-125/report.json', 'catalog-visual/report.json', 'catalog-visual-125/report.json', 'text-layout/report.json', 'text-layout-125/report.json', 'template-upgrade/report.json']) {
+            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'source-output.txt', 'source-exit-code.txt', 'packaged-smoke.json', 'build-output.txt', 'packaged-output.txt', 'packaged-upgrade-apply.json', 'packaged-upgrade-verify.json', 'packaged-upgrade-apply.txt', 'packaged-upgrade-verify.txt', 'visual/report.json', 'visual-125/report.json', 'catalog-visual/report.json', 'catalog-visual-125/report.json', 'text-layout/report.json', 'text-layout-125/report.json', 'template-upgrade/report.json']) {
               const source = path.join(root, 'artifacts', name);
               if (fs.existsSync(source)) report.files[name] = fs.readFileSync(source, 'utf8').slice(0, 250000);
             }
@@ -203,6 +204,10 @@ jobs:
               const name = `${phase}-${theme}-block.png`;
               const source = path.join(root, 'artifacts', 'template-upgrade', name);
               if (fs.existsSync(source)) captures.push({name: 'template-upgrade-' + name, source});
+            }
+            for (const name of ['apply-historical-default.png','verify-historical-default.png','verify-value.png','verify-text.png','verify-placeholder.png']) {
+              const source = path.join(root, 'artifacts', 'exe-upgrade', name);
+              if (fs.existsSync(source)) captures.push({name: 'exe-upgrade-' + name, source});
             }
             if (captures.length) {
               const ref = await github.rest.git.getRef({owner, repo, ref: 'heads/' + branch});

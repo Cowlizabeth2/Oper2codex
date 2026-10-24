@@ -41,6 +41,7 @@ ApplicationWindow {
     function manageCatalogs() { catalogManager.open() }
     function importScenarios() { scenarioImport.open() }
     function inspectTemplates() { if(run("inspect_templates")) templateMigration.open() }
+    function inspectSelectedTemplate() { if(state.selectedBlock && run("inspect_templates",{block_id:state.selectedBlock.id})) templateMigration.open() }
     CatalogSearch { id: catalogSearch; shell: window }
     CatalogManager { id: catalogManager; shell: window }
     ScenarioImport { id: scenarioImport; shell: window }

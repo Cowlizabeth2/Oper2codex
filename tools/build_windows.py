@@ -5,7 +5,9 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 
 
 def checked_run(command, logfile, timeout=None):
@@ -43,6 +45,21 @@ def build():
     result = json.loads(report.read_text(encoding="utf-8"))
     if not result["ok"] or len(result["checks"]) != 14 or len(result.get("service_checks", [])) != 9 or result["qml_errors"] or result.get('commit') != commit:
         raise RuntimeError("Packaged application failed functional QML smoke-test")
+    # This database exists on disk BEFORE the EXE starts. The ordinary clean
+    # smoke workspace cannot substitute for a real application upgrade check.
+    from tools.prepare_exe_upgrade import prepare
+    with tempfile.TemporaryDirectory(prefix='oper-exe-upgrade-') as temp:
+        data=Path(temp)/'old-profile'
+        manifest=prepare(data)
+        for phase in ['apply','verify']:
+            upgrade_report=root/'artifacts'/f'packaged-upgrade-{phase}.json'
+            checked_run([str(folder/'OperationalCenter.exe'),'--upgrade-test','--data-dir',str(data),
+                         '--upgrade-manifest',str(manifest),'--upgrade-phase',phase,
+                         '--upgrade-output',str(root/'artifacts'/'exe-upgrade'),
+                         '--smoke-report',str(upgrade_report)],root/'artifacts'/f'packaged-upgrade-{phase}.txt',timeout=120)
+            upgraded=json.loads(upgrade_report.read_text(encoding='utf-8'))
+            if not upgraded['ok'] or upgraded.get('commit')!=commit or not upgraded.get('upgrade',{}).get('ok'):
+                raise RuntimeError('Packaged EXE could not upgrade and reopen the precreated legacy database')
     scripts = {
         "ЗАПУСТИТЬ.bat": '@echo off\r\ncd /d "%~dp0"\r\nstart "" "OperationalCenter.exe"\r\n',
         "ДИАГНОСТИКА.bat": '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\nstart "" /wait "OperationalCenter.exe"\r\necho Код выхода: %errorlevel%\r\necho Логи: %LOCALAPPDATA%\\OperationalCenter\\startup.log\r\npause\r\n',

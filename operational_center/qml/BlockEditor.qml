@@ -73,6 +73,8 @@ ColumnLayout {
     }
     Section {
         title: "Содержимое"; visible: editor.block && editor.block.type==="text"
+        ActionButton { objectName: "repairTextStructure"; text: "Проверить структуру и исправить…"; iconName: "search"; enabled: !editor.dirty; Layout.fillWidth: true; onClicked: shell.inspectSelectedTemplate() }
+        Label { visible: editor.dirty; text: "Сохраните изменения блока перед проверкой."; color: Theme.warning; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; wrapMode: Text.Wrap }
         Label { text: "Выделите фрагмент или поставьте курсор, чтобы создать поле."; color: Theme.muted; font.pixelSize: Theme.smallSize; wrapMode: Text.Wrap; Layout.fillWidth: true }
         ScrollView { Layout.fillWidth: true; Layout.preferredHeight: Theme.px(160); contentWidth: availableWidth
             Area { id: sourceArea; objectName: "templateSourceEditor"; persistentSelection: true; placeholderText: "Текст сообщения…"; onTextChanged: if(activeFocus) editor.dirty=true }

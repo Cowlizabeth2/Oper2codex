@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import sqlite3
 from contextlib import closing
 
@@ -45,10 +46,12 @@ def key(document, master, block, field):
     return json.dumps([document['scope'],document['identity'],master['id'],block['id'],field['id']],ensure_ascii=False)
 
 
-def inspect(store):
+def inspect(store, block_id=''):
     candidates, unsupported = {}, []
     for document in documents(store):
         for master, block in blocks(document):
+            if block_id and block['id']!=block_id:
+                continue
             segments = block.get('config', {}).get('segments')
             if not isinstance(segments,list) or any(not isinstance(s,dict) or s.get('kind') not in {'text','field'} or s.get('kind')=='field' and not s.get('id') for s in segments):
                 unsupported.append({'scope':document['title'], 'block':block.get('title',''), 'keys':list(block.get('config',{})),
@@ -62,22 +65,38 @@ def inspect(store):
                 identity = json.dumps([block['id'],field['id']])
                 entry = candidates.setdefault(identity, {'id':identity,'block_id':block['id'],'field_id':field['id'],
                     'title':f"{master.get('name','')} / {block.get('title','')} / {field.get('label','')}", 'records':[]})
+                properties={name:copy.deepcopy(field[name]) for name in ('default','value','text','placeholder') if name in field}
+                caption=str(field.get('label','')).rstrip(': ') + ':'
+                issues=[]
+                for name,value in properties.items():
+                    if isinstance(value,str) and (value.strip().casefold().startswith(caption.casefold()) or re.match(r'^\s*[^\W\d_][^:\r\n]{0,59}:',value)):
+                        issues.append(f'Возможная подпись в редактируемом свойстве {name}; требуется просмотр')
+                effective=values.get(field['id'],field.get('default',''))
+                if isinstance(effective,str) and effective.strip().casefold().startswith(caption.casefold()):
+                    issues.append('Подпись присутствует в сохранённом значении происшествия')
+                for name in ('value','text'):
+                    if name in properties and ('default' not in field or field[name]!=field['default']):
+                        issues.append(f'Неканоническое свойство {name}: требуется явный выбор источника')
                 entry['records'].append({'scope':document['title'], 'default':field.get('default',''),
+                    'properties':properties,'issues':issues,'segments':copy.deepcopy(segments),
                     'kind':field['kind'],'previous_segment':segments[index-1] if index else None,
                     'value':values.get(field['id'],field.get('default','')),
                     'value_present':field['id'] in values,'unmatched_value_keys':sorted(set(values)-known),
                     'phrases':field.get('phrases',[])})
     return {'candidates':list(candidates.values()), 'unsupported':unsupported,
+            'problem_count':sum(len(r['issues']) for candidate in candidates.values() for r in candidate['records'])+len(unsupported),
             'explanation':'Тип field в SQLite напрямую становится полем ввода. Префикс не определяется по имени поля автоматически.'}
 
 
-def prepare(store, block_id, field_id, prefix):
+def prepare(store, block_id, field_id, prefix, source_property='default'):
     with store.db:
         store.db.execute('BEGIN')
-        return _prepare(store,block_id,field_id,prefix)
+        return _prepare(store,block_id,field_id,prefix,source_property)
 
 
-def _prepare(store, block_id, field_id, prefix):
+def _prepare(store, block_id, field_id, prefix, source_property):
+    if source_property not in {'default','value','text','placeholder'}:
+        raise ValueError('Неизвестный источник значения')
     if not isinstance(prefix,str) or not prefix or '\n' in prefix or '\r' in prefix:
         raise ValueError('Укажите точный непустой однострочный префикс из сохранённого значения')
     rows, changes = [], []
@@ -94,24 +113,31 @@ def _prepare(store, block_id, field_id, prefix):
                 record_key=key(document,master,block,field)
                 values=document.get('state',{}).get(block_id,{}).get('values',{})
                 default=field.get('default','')
+                source_value=field.get(source_property)
+                already_static=bool(index and segments[index-1].get('kind')=='text' and segments[index-1].get('text','').endswith(prefix))
                 row={'key':record_key,'scope':document['title'],'default_before':default,
+                     'source_property':source_property,'source_before':source_value,'already_static':already_static,
                      'value_before':values.get(field_id,default),'phrases_before':copy.deepcopy(field.get('phrases',[])),
                      'eligible':True,'reason':'','copy_before':render(segments,values)}
-                if not isinstance(default,str) or not default.startswith(prefix):
-                    row.update(eligible=False,reason='Значение по умолчанию не начинается с точного префикса. Другая версия шаблона требует отдельного разбора.')
-                elif index and segments[index-1].get('kind')=='text' and segments[index-1].get('text','').endswith(prefix):
-                    row.update(eligible=False,reason='Перед полем уже есть такой постоянный текст. Повторное добавление запрещено.')
+                if not isinstance(source_value,str) or not source_value.startswith(prefix):
+                    row.update(eligible=False,reason=f'Свойство {source_property} не начинается с точного префикса. Выберите другой источник или точный текст.')
                 if set(values)-{s.get('id') for s in segments if s.get('kind')=='field'}:
                     row.update(eligible=False,reason='Есть значения с неизвестными ID полей. Их соответствие нельзя угадывать; нужен отдельный разбор.')
                 if not row['eligible']:
                     rows.append(row)
                     continue
                 updated=copy.deepcopy(field)
-                updated['default']=default[len(prefix):]
+                updated.setdefault('_repair_archive',[]).append({'source':source_property,'prefix':prefix,
+                    'properties':{name:copy.deepcopy(field[name]) for name in ('default','value','text','placeholder','phrases') if name in field}})
+                if source_property=='placeholder':
+                    updated['default']=default[len(prefix):] if isinstance(default,str) and default.startswith(prefix) else default
+                else:
+                    updated['default']=source_value[len(prefix):]
+                updated[source_property]=source_value[len(prefix):]
                 # Preserve every phrase; only move the exact reviewed prefix.
                 updated['phrases']=[p[len(prefix):] if isinstance(p,str) and p.startswith(prefix) else p for p in field.get('phrases',[])]
                 after_segments=copy.deepcopy(segments)
-                after_segments[index:index+1]=[{'kind':'text','text':prefix},updated]
+                after_segments[index:index+1]=([{'kind':'text','text':prefix}] if not already_static else [])+[updated]
                 after_values=copy.deepcopy(values)
                 old_value=values.get(field_id,default)
                 if field_id in values and isinstance(old_value,str) and old_value.startswith(prefix):
