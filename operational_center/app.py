@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl, qInstallMessageHandler, QtMsgType
+from PySide6.QtCore import QTimer, QUrl, qInstallMessageHandler, QtMsgType, QMetaObject, Qt, QObject
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -93,22 +93,27 @@ def main(argv=None):
                 workbook.active.cell(2, column, value)
             workbook.save(contacts)
             workbook.close()
-            blocks = [new_block(kind) for kind in ("text", "contacts", "documents", "reference")]
+            blocks = [new_block(kind) for kind in ("text", "contacts", "documents", "reference", "static_text")]
             for index, block in enumerate(blocks):
                 block.update(x=260 + index % 2 * 500, y=60 + index // 2 * 390)
             blocks[0]["config"]["segments"] = [{"kind": "text", "text": "Проверка: "}, field("Сообщение", default="тест")]
             blocks[1]["config"]["path"] = contacts
-            for block in blocks[2:]:
+            for block in blocks[2:4]:
                 block["config"]["sources"] = [str(source)]
+            blocks[4]["config"].update(text="**Памятка**\nСтрока 2", format="markdown")
             _, config = store.config("draft")
             config["masters"][0]["blocks"] = blocks
             config["masters"][0]["links"] = [b["id"] for b in blocks]
+            from .catalog import new_catalog
+            catalog = new_catalog()
+            catalog["members"] = [master["id"]]
+            config["catalogs"] = [catalog]
             store.save_draft(config)
             store.publish()
-            if not backend.command("create_event", json.dumps({"id": master["id"]})):
+            if not backend.command("launch_catalog", json.dumps({"id": master["id"], "catalog": catalog["id"]})):
                 raise RuntimeError("Smoke: создание события не выполнено")
             runtime = backend.state["event"]
-            if len(runtime["snapshot"]["blocks"]) != 4:
+            if len(runtime["snapshot"]["blocks"]) != 5:
                 raise RuntimeError("Smoke: не все блоки активированы")
             by_type = {b["type"]: b for b in runtime["snapshot"]["blocks"]}
             if by_type["text"]["preview"] != "Проверка: тест" or len(by_type["contacts"]["contacts"]) != 1:
@@ -119,17 +124,31 @@ def main(argv=None):
             if len(by_type["reference"]["files"]) != 1:
                 raise RuntimeError("Smoke: справочный файл не найден")
             result["service_checks"] = ["event_snapshot", "template_render", "excel_import", "document_copy", "reference_scan"]
+            if by_type["static_text"]["static"]["plain"] != "Памятка\nСтрока 2" or not backend.searchCatalog(catalog["id"], master["tag"], "", "all"):
+                raise RuntimeError("Smoke: свободный текст или каталог не работает")
+            from .scenario_import import sample
+            sample_path = sample(data_dir / "scenario-import.xlsx")
+            if not backend.command("preview_scenarios", json.dumps({"path":sample_path})) or backend.state["importPreview"]["valid"] != 1:
+                raise RuntimeError("Smoke: предварительная проверка сценариев не работает")
+            result["service_checks"].extend(["static_text", "catalog_search_launch", "scenario_import_preview"])
             backend.command("select_block", json.dumps({"id": blocks[0]["id"]}))
-            smoke_steps = [("events", "text"), ("builder", "text"), ("builder", "contacts"), ("builder", "documents"), ("builder", "reference"), ("history", "reference"), ("settings", "reference"), ("logs", "reference"), ("home", "reference")]
+            smoke_steps = [("events", "text"), ("builder", "text"), ("builder", "contacts"), ("builder", "documents"), ("builder", "reference"), ("builder", "static_text"), ("history", "reference"), ("settings", "reference"), ("logs", "reference"), ("home", "reference"), ("catalog", "search"), ("catalog", "manager"), ("catalog", "import")]
             QTimer.singleShot(15000, lambda: app.exit(3))
 
         def smoke_next():
             if smoke_steps:
                 page, kind = smoke_steps.pop(0)
+                for name in ("catalogSearchDialog", "catalogManagerDialog", "scenarioImportDialog"):
+                    popup = root.findChild(QObject, name)
+                    if popup and popup.property("visible"):
+                        QMetaObject.invokeMethod(popup, "close", Qt.DirectConnection)
+                if page == "catalog":
+                    QMetaObject.invokeMethod(root, {"search":"openAllScenarios", "manager":"manageCatalogs", "import":"importScenarios"}[kind], Qt.DirectConnection)
                 if page == "builder":
                     block = next(b for b in blocks if b["type"] == kind)
                     backend.command("select_block", json.dumps({"id": block["id"]}))
-                root.setProperty("page", page)
+                if page != "catalog":
+                    root.setProperty("page", page)
                 result["checks"].append(page + ":" + kind)
                 QTimer.singleShot(150, smoke_next)
             else:

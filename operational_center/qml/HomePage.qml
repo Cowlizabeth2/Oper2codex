@@ -7,7 +7,7 @@ ScrollView {
     required property var shell
     clip: true
     contentWidth: availableWidth
-    function focusSearch() { search.forceActiveFocus() }
+    function focusSearch() { shell.openCatalog({id:"",name:"Все сценарии",opening:"compact",members:[]}) }
     ColumnLayout {
         width: view.availableWidth; spacing: Theme.s16
         RowLayout { Layout.fillWidth: true
@@ -22,7 +22,32 @@ ScrollView {
             columns: Math.max(1,Math.floor(width / Theme.px(248)))
             columnSpacing: Theme.s12; rowSpacing: Theme.s12
             Repeater {
-                model: shell.state.published.masters.filter(function(m) { return m.name.toLowerCase().indexOf(search.text.toLowerCase()) >= 0 })
+                model: shell.state.published.catalogs || []
+                delegate: Rectangle {
+                    id: catalogTile
+                    required property var modelData
+                    objectName: "catalogCard-"+modelData.id
+                    Layout.fillWidth: true; Layout.minimumWidth: Theme.px(208); implicitHeight: Theme.px(112)
+                    radius: Theme.radius; color: catalogMouse.containsMouse ? Theme.card : Theme.panel; border.color: catalogMouse.containsMouse ? Theme.accent : Theme.border
+                    ColumnLayout { anchors.fill: parent; anchors.margins: Theme.s16; spacing: Theme.s8
+                        RowLayout { Layout.fillWidth: true
+                            Label { text: catalogTile.modelData.icon; color: catalogTile.modelData.color; font.pixelSize: Theme.headingSize }
+                            Label { text: catalogTile.modelData.name; color: Theme.text; font.bold: true; font.pixelSize: Theme.headingSize; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Icon { name: "search" }
+                        }
+                        Label { text: catalogTile.modelData.members.length+" сценариев · Поиск"; color: Theme.muted; font.pixelSize: Theme.smallSize }
+                    }
+                    MouseArea { id: catalogMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: shell.openCatalog(catalogTile.modelData) }
+                }
+            }
+        }
+        ActionButton { text: "Все сценарии ("+shell.state.published.masters.length+") · Поиск"; iconName: "search"; visible: shell.state.published.masters.length>12; onClicked: view.focusSearch() }
+        GridLayout {
+            Layout.fillWidth: true
+            columns: Math.max(1,Math.floor(width / Theme.px(248)))
+            columnSpacing: Theme.s12; rowSpacing: Theme.s12
+            Repeater {
+                model: shell.state.published.masters.filter(function(m) { return !(shell.state.published.catalogs || []).some(function(c) {return c.members.indexOf(m.id)>=0}) && m.name.toLowerCase().indexOf(search.text.toLowerCase()) >= 0 }).slice(0,12)
                 delegate: Rectangle {
                     id: tile
                     required property var modelData

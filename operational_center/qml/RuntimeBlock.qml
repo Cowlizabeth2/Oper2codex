@@ -15,7 +15,15 @@ Rectangle {
             Label { text: card.block.title; color: Theme.text; font.bold: true; font.pixelSize: Theme.fontSize; Layout.fillWidth: true; elide: Text.ElideRight }
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
-        Loader { Layout.fillWidth: true; Layout.fillHeight: true; sourceComponent: card.block.type==="text" ? textBlock : card.block.type==="contacts" ? contactsBlock : card.block.type==="documents" ? documentsBlock : referenceBlock }
+        Loader { Layout.fillWidth: true; Layout.fillHeight: true; sourceComponent: card.block.type==="static_text" ? staticBlock : card.block.type==="text" ? textBlock : card.block.type==="contacts" ? contactsBlock : card.block.type==="documents" ? documentsBlock : referenceBlock }
+    }
+    Component { id: staticBlock
+        ColumnLayout {
+            ScrollView { Layout.fillWidth: true; Layout.fillHeight: true; contentWidth: availableWidth; clip: true
+                Label { objectName: "staticDisplay-"+card.block.id; width: parent.width; text: card.block.config.format==="markdown" ? card.block.static.html : card.block.config.text; textFormat: card.block.config.format==="markdown" ? Text.RichText : Text.PlainText; wrapMode: Text.Wrap; color: Theme.text; font.pixelSize: Theme.px(card.block.config.font_size || 13); horizontalAlignment: card.block.config.alignment==="center" ? Text.AlignHCenter : card.block.config.alignment==="right" ? Text.AlignRight : Text.AlignLeft }
+            }
+            ActionButton { objectName: "copyStatic-"+card.block.id; text: "Копировать текст"; iconName: "copy"; visible: card.block.config.copy_enabled!==false; Layout.fillWidth: true; onClicked: card.shell.run("copy_static",{id:card.block.id}) }
+        }
     }
     Component { id: textBlock; InlineMessage { shell: card.shell; block: card.block } }
     Component {

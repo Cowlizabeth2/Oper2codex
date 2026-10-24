@@ -19,6 +19,7 @@ ColumnLayout {
     spacing: Theme.s8
     function selected(id) { return selectedIds.indexOf(id)>=0 }
     function summary(block) {
+        if(block.type==="static_text") return "Свободный текст · "+block.config.text.length+" знаков"
         if(block.type==="text") return block.config.segments.filter(function(s) { return s.kind==="field" }).length+" полей"
         if(block.type==="contacts") return block.config.path ? block.config.path.split("\\").join("/").split("/").pop() : "Файл не подключён"
         return block.config.sources.length ? block.config.sources.length+" источников" : "Нет источников"
@@ -59,7 +60,7 @@ ColumnLayout {
     }
     function saveGeometry(id) {
         var items=[]
-        for(var i=0;i<selectedIds.length;++i) { var t=tileFor(selectedIds[i]);if(t) items.push({id:t.modelData.id,x:Math.max(0,t.x),y:Math.max(0,t.y),width:Math.max(320,t.width),height:Math.max(260,t.height)}) }
+        for(var i=0;i<selectedIds.length;++i) { var t=tileFor(selectedIds[i]);if(t) items.push({id:t.modelData.id,x:Math.max(0,t.x),y:Math.max(0,t.y),width:Math.max(t.modelData.type==="static_text" ? 240 : 320,t.width),height:Math.max(t.modelData.type==="static_text" ? 180 : 260,t.height)}) }
         guideX=-1;guideY=-1
         if(items.length) shell.run("geometry_batch",{items:items})
         else synchronizeSelection(id)
@@ -86,14 +87,16 @@ ColumnLayout {
         if(chosen && view.selectedIds.indexOf(chosen.id)<0) view.selectedIds=[chosen.id]
         Qt.callLater(view.updateEdges)
     } }
-    Shortcut { sequence: "Ctrl+D"; enabled: shell.page==="builder" && !shell.editingText; onActivated: view.duplicateSelection() }
-    Shortcut { sequences: [StandardKey.Copy]; enabled: shell.page==="builder" && !shell.editingText; onActivated: shell.run("copy_blocks",{ids:view.selectedIds}) }
-    Shortcut { sequences: [StandardKey.Paste]; enabled: shell.page==="builder" && !shell.editingText; onActivated: shell.run("paste_blocks") }
-    Shortcut { sequence: "Delete"; enabled: shell.page==="builder" && !shell.editingText; onActivated: view.removeSelection() }
+    Shortcut { sequence: "Ctrl+D"; enabled: shell.page==="builder" && !shell.editingText && !shell.catalogModal; onActivated: view.duplicateSelection() }
+    Shortcut { sequences: [StandardKey.Copy]; enabled: shell.page==="builder" && !shell.editingText && !shell.catalogModal; onActivated: shell.run("copy_blocks",{ids:view.selectedIds}) }
+    Shortcut { sequences: [StandardKey.Paste]; enabled: shell.page==="builder" && !shell.editingText && !shell.catalogModal; onActivated: shell.run("paste_blocks") }
+    Shortcut { sequence: "Delete"; enabled: shell.page==="builder" && !shell.editingText && !shell.catalogModal; onActivated: view.removeSelection() }
     RowLayout {
         Layout.fillWidth: true; spacing: Theme.s8
         Choice { id: masterChoice; Layout.preferredWidth: Theme.px(180); model: shell.state.draft.masters; textRole: "name"; currentIndex: shell.state.master ? shell.state.draft.masters.findIndex(function(m) { return m.id===shell.state.master.id }) : -1; onActivated: { view.selectedIds=[];shell.run("select_master",{id:model[currentIndex].id}) } }
         ActionButton { iconName: "plus"; tip: "Новый мастер"; onClicked: shell.run("new_master") }
+        ActionButton { iconName: "reference"; tip: "Поисковые каталоги"; objectName: "manageCatalogs"; onClicked: shell.manageCatalogs() }
+        ActionButton { iconName: "file"; tip: "Импорт сценариев Excel"; objectName: "importScenarios"; onClicked: shell.importScenarios() }
         ActionButton { iconName: "undo"; quiet: true; enabled: shell.state.canUndo; tip: "Отменить · Ctrl Z"; onClicked: shell.run("undo") }
         ActionButton { iconName: "redo"; quiet: true; enabled: shell.state.canRedo; tip: "Повторить · Ctrl Y"; onClicked: shell.run("redo") }
         Rectangle { width: 1; height: Theme.s16; color: Theme.border }
@@ -113,7 +116,7 @@ ColumnLayout {
             ColumnLayout { anchors.fill: parent; anchors.margins: Theme.s8; spacing: Theme.s4
                 Label { text: "КОМПОНЕНТЫ"; color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.margins: Theme.s4 }
                 Repeater {
-                    model: [{type:"text",name:"Шаблон"},{type:"contacts",name:"Контакты"},{type:"documents",name:"Документы"},{type:"reference",name:"Файлы"}]
+                    model: [{type:"text",name:"Шаблон"},{type:"static_text",name:"Свободный текст"},{type:"contacts",name:"Контакты"},{type:"documents",name:"Документы"},{type:"reference",name:"Файлы"}]
                     ActionButton { required property var modelData; Layout.fillWidth: true; text: modelData.name; iconName: modelData.type; quiet: true; enabled: !!shell.state.master; onClicked: shell.run("add_block",{type:modelData.type}) }
                 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: Theme.s8; Layout.bottomMargin: Theme.s8 }
@@ -176,7 +179,7 @@ ColumnLayout {
                                 Label { text: tile.modelData.title; color: Theme.text; font.pixelSize: Theme.fontSize; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                 Icon { name: "more"; rotation: 90 }
                             }
-                            Label { text: ({text:"Шаблон",contacts:"Excel",documents:"Документы",reference:"Файлы"})[tile.modelData.type]+" · "+view.summary(tile.modelData); color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Label { text: ({text:"Шаблон",static_text:"Текст",contacts:"Excel",documents:"Документы",reference:"Файлы"})[tile.modelData.type]+" · "+view.summary(tile.modelData); color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; elide: Text.ElideRight }
                         }
                         MouseArea {
                             objectName: "dragHandle-"+tile.modelData.id
@@ -218,7 +221,7 @@ ColumnLayout {
                                 var p=mapToItem(viewport.stage,mouse.x,mouse.y),dx=p.x-start.x,dy=p.y-start.y
                                 var w=original.width+(east ? dx : west ? -dx : 0),h=original.height+(south ? dy : north ? -dy : 0)
                                 if(view.snapping) { w=Math.round(w/Theme.grid)*Theme.grid;h=Math.round(h/Theme.grid)*Theme.grid }
-                                w=Math.max(320,w);h=Math.max(260,h)
+                                w=Math.max(tile.modelData.type==="static_text" ? 240 : 320,w);h=Math.max(tile.modelData.type==="static_text" ? 180 : 260,h)
                                 if(west) { w=Math.min(w,original.width+original.x);tile.x=original.x+original.width-w }
                                 if(north) { h=Math.min(h,original.height+original.y);tile.y=original.y+original.height-h }
                                 tile.width=w;tile.height=h
@@ -259,7 +262,13 @@ ColumnLayout {
                 Input { id: masterIcon; Layout.fillWidth: true; placeholderText: "Значок"; text: shell.state.master ? shell.state.master.icon : "!" }
                 Input { id: masterColor; Layout.fillWidth: true; placeholderText: "Цвет #RRGGBB"; text: shell.state.master ? shell.state.master.color : "" }
             }
-            ActionButton { text: "Сохранить мастер"; iconName: "save"; primary: true; Layout.fillWidth: true; onClicked: shell.run("save_master",{name:masterName.text,tag:masterTag.text,icon:masterIcon.text,color:masterColor.text}) }
+            Section { title: "Поиск в каталогах"; expanded: false
+                Input { id: masterKm; Layout.fillWidth: true; placeholderText: "Код КМ"; text: shell.state.master ? (shell.state.master.km_code || "") : "" }
+                Input { id: masterCategory; Layout.fillWidth: true; placeholderText: "Категория или линия"; text: shell.state.master ? (shell.state.master.category || "") : "" }
+                Area { id: masterAliases; Layout.fillWidth: true; implicitHeight: Theme.px(72); placeholderText: "Альтернативные названия · через ;"; text: shell.state.master ? (shell.state.master.aliases || []).join("; ") : "" }
+                Area { id: masterTags; Layout.fillWidth: true; implicitHeight: Theme.px(72); placeholderText: "Поисковые теги · через ;"; text: shell.state.master ? (shell.state.master.tags || []).join("; ") : "" }
+            }
+            ActionButton { text: "Сохранить мастер"; iconName: "save"; primary: true; Layout.fillWidth: true; onClicked: shell.run("save_master",{name:masterName.text,tag:masterTag.text,icon:masterIcon.text,color:masterColor.text,km_code:masterKm.text,category:masterCategory.text,aliases:masterAliases.text.split(";").map(function(s) {return s.trim()}).filter(function(s){return s.length>0}),tags:masterTags.text.split(";").map(function(s){return s.trim()}).filter(function(s){return s.length>0})}) }
             ActionButton { text: "Дублировать сценарий"; iconName: "copy"; quiet: true; Layout.fillWidth: true; onClicked: shell.run("duplicate_master") }
             ActionButton { text: "Удалить мастер"; iconName: "trash"; danger: true; quiet: true; Layout.fillWidth: true; onClicked: shell.confirm("Удалить мастер и его блоки из черновика? Существующие происшествия сохранятся.",function() { shell.run("delete_master") }) }
             Label { text: shell.state.master ? "UUID · "+shell.state.master.id : ""; color: Theme.muted; font.pixelSize: Theme.smallSize; wrapMode: Text.Wrap; Layout.fillWidth: true }

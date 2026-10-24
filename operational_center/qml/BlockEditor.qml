@@ -22,6 +22,7 @@ ColumnLayout {
         var previous=loadedIdentity===block.id && selectedField ? selectedField.id : ""
         loadedIdentity=block.id;fingerprint=next;titleInput.text=block.title;accent.text=block.accent || ""
         if(block.type==="text") { sourceArea.text=shell.state.templateSource || "";fields=JSON.parse(JSON.stringify(shell.state.templateFields || []));fieldIndex=Math.max(0,fields.findIndex(function(f) { return f.id===previous }));loadField() }
+        else if(block.type==="static_text") { staticSource.text=block.config.text;staticFormat.currentIndex=block.config.format==="markdown" ? 1 : 0;staticCopy.checked=block.config.copy_enabled!==false;staticSize.text=String(block.config.font_size || 13);staticAlignment.currentIndex=Math.max(0,["left","center","right"].indexOf(block.config.alignment || "left")) }
         else if(block.type==="contacts") { contactsPath.text=block.config.path || "";tagMapping.text=JSON.stringify(block.config.tag_map || {},null,2) }
         else { sources.text=(block.config.sources || []).join("\n");extensions.text=(block.config.extensions || []).join(", ");recursive.checked=!!block.config.recursive;output.text=block.config.output || "" }
         dirty=false
@@ -39,7 +40,8 @@ ColumnLayout {
         editor.forceActiveFocus()
         var cfg
         if(block.type==="text") { if(backend.saveTemplate(block.id,titleInput.text,sourceArea.text,JSON.stringify(fields),accent.text)) dirty=false;return }
-        if(block.type==="contacts") {
+        if(block.type==="static_text") { cfg={text:staticSource.text,format:staticFormat.currentIndex===1 ? "markdown" : "plain",copy_enabled:staticCopy.checked,font_size:Number(staticSize.text),alignment:["left","center","right"][staticAlignment.currentIndex]} }
+        else if(block.type==="contacts") {
             try { cfg={path:contactsPath.text,tag_map:JSON.parse(tagMapping.text)} } catch(e) { shell.confirm("Проверьте JSON соответствия тегов: "+e,function() {});return }
         } else {
             cfg={sources:sources.text.split("\n").map(function(s) { return s.trim() }).filter(function(s) { return s.length>0 }),recursive:recursive.checked,extensions:extensions.text.split(",").map(function(s) { return s.trim() }).filter(function(s) { return s.length>0 })}
@@ -56,7 +58,18 @@ ColumnLayout {
     }
     Section { title: "Общее"
         Input { id: titleInput; Layout.fillWidth: true; placeholderText: "Название блока"; onTextEdited: editor.dirty=true }
-        Label { text: editor.block ? ({text:"Текстовый шаблон",contacts:"Контакты Excel",documents:"Рабочие документы",reference:"Сопутствующие файлы"})[editor.block.type] : ""; color: Theme.muted; font.pixelSize: Theme.smallSize }
+        Label { text: editor.block ? ({text:"Текстовый шаблон",static_text:"Свободный текст · без полей",contacts:"Контакты Excel",documents:"Рабочие документы",reference:"Сопутствующие файлы"})[editor.block.type] : ""; color: Theme.muted; font.pixelSize: Theme.smallSize }
+    }
+    Section {
+        title: "Свободный текст"; visible: editor.block && editor.block.type==="static_text"
+        ScrollView { Layout.fillWidth: true; Layout.preferredHeight: Theme.px(220); contentWidth: availableWidth
+            Area { id: staticSource; objectName: "staticTextEditor"; placeholderText: "Текст для сотрудника"; onTextChanged: if(activeFocus) editor.dirty=true }
+        }
+        Choice { id: staticFormat; Layout.fillWidth: true; model: ["Обычный текст","Базовое форматирование"]; onActivated: editor.dirty=true }
+        Label { text: "**жирный**, *курсив*, __подчёркнутый__, # заголовок. При копировании разметка убирается, переносы сохраняются. HTML не выполняется."; visible: staticFormat.currentIndex===1; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.smallSize }
+        Check { id: staticCopy; text: "Показывать кнопку копирования"; onToggled: editor.dirty=true }
+        Input { id: staticSize; Layout.fillWidth: true; placeholderText: "Размер текста: 10–32"; onTextEdited: editor.dirty=true }
+        Choice { id: staticAlignment; Layout.fillWidth: true; model: ["По левому краю","По центру","По правому краю"]; onActivated: editor.dirty=true }
     }
     Section {
         title: "Содержимое"; visible: editor.block && editor.block.type==="text"

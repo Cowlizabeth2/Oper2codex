@@ -75,6 +75,23 @@ jobs:
           Set-Location $env:OPER_BUILD_ROOT
           python tools/visual_review.py --output artifacts/visual-125 --sizes 1366x768
           exit $LASTEXITCODE
+      - name: Review static text and 300-scenario catalog in both themes
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          Set-Location $env:OPER_BUILD_ROOT
+          python tools/visual_review.py --catalogs --output artifacts/catalog-visual --sizes 1920x1080,1366x768
+          exit $LASTEXITCODE
+      - name: Review catalog windows at 125 percent
+        shell: pwsh
+        env:
+          QT_SCALE_FACTOR: '1.25'
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          Set-Location $env:OPER_BUILD_ROOT
+          python tools/visual_review.py --catalogs --output artifacts/catalog-visual-125 --sizes 1366x768
+          exit $LASTEXITCODE
       - name: Build and smoke-test packaged application
         shell: pwsh
         run: |
@@ -105,6 +122,8 @@ jobs:
           path: |
             ${{ env.OPER_BUILD_ROOT }}/artifacts/visual/
             ${{ env.OPER_BUILD_ROOT }}/artifacts/visual-125/
+            ${{ env.OPER_BUILD_ROOT }}/artifacts/catalog-visual/
+            ${{ env.OPER_BUILD_ROOT }}/artifacts/catalog-visual-125/
           if-no-files-found: ignore
       - name: Save machine-readable build report
         if: always()
@@ -116,7 +135,7 @@ jobs:
             const root = process.env.OPER_BUILD_ROOT;
             if (!root) return;
             const report = {commit: context.sha, run_id: context.runId, files: {}};
-            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'source-output.txt', 'source-exit-code.txt', 'packaged-smoke.json', 'build-output.txt', 'packaged-output.txt', 'visual/report.json', 'visual-125/report.json']) {
+            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'source-output.txt', 'source-exit-code.txt', 'packaged-smoke.json', 'build-output.txt', 'packaged-output.txt', 'visual/report.json', 'visual-125/report.json', 'catalog-visual/report.json', 'catalog-visual-125/report.json']) {
               const source = path.join(root, 'artifacts', name);
               if (fs.existsSync(source)) report.files[name] = fs.readFileSync(source, 'utf8').slice(0, 250000);
             }
@@ -141,6 +160,11 @@ jobs:
               const name = `1366x768-${theme}-${page}.png`;
               const source = path.join(root, 'artifacts', 'visual', name);
               if (fs.existsSync(source)) captures.push({name, source});
+            }
+            for (const theme of ['dark', 'light']) for (const page of ['catalog', 'events', 'scenario-import']) {
+              const name = `1366x768-${theme}-${page}.png`;
+              const source = path.join(root, 'artifacts', 'catalog-visual', name);
+              if (fs.existsSync(source)) captures.push({name: 'catalog-' + name, source});
             }
             if (captures.length) {
               const ref = await github.rest.git.getRef({owner, repo, ref: 'heads/' + branch});

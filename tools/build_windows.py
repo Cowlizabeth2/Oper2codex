@@ -31,7 +31,7 @@ def build():
     report.parent.mkdir(exist_ok=True)
     checked_run([str(folder / "OperationalCenter.exe"), "--smoke-test", "--smoke-report", str(report)], root / "artifacts" / "packaged-output.txt", timeout=60)
     result = json.loads(report.read_text(encoding="utf-8"))
-    if not result["ok"] or len(result["checks"]) != 9 or result["qml_errors"]:
+    if not result["ok"] or len(result["checks"]) != 13 or len(result.get("service_checks", [])) != 8 or result["qml_errors"]:
         raise RuntimeError("Packaged application failed functional QML smoke-test")
     scripts = {
         "ЗАПУСТИТЬ.bat": '@echo off\r\ncd /d "%~dp0"\r\nstart "" "OperationalCenter.exe"\r\n',

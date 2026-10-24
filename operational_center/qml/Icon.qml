@@ -18,6 +18,7 @@ Item {
         settings: '<path d="M3 5h14M3 10h14M3 15h14"/><circle cx="7" cy="5" r="2"/><circle cx="13" cy="10" r="2"/><circle cx="8" cy="15" r="2"/>',
         logs: '<path d="M5 2h8l3 3v13H5Z"/><path d="M8 8h5m-5 3h5m-5 3h3"/>',
         text: '<path d="M3 4h14M10 4v13m-3 0h6"/>',
+        static_text: '<path d="M3 4h14M3 8h10M3 12h14M3 16h8"/>',
         contacts: '<circle cx="8" cy="6" r="3"/><path d="M2 17v-2a5 5 0 0 1 10 0v2m2-9h4m-4 4h4"/>',
         documents: '<path d="M6 2h7l4 4v12H6Zm7 0v4h4M3 5v12"/>',
         reference: '<path d="M2 6h6l2 2h8v9H2Zm0 0V3h6l2 2h6v3"/>',

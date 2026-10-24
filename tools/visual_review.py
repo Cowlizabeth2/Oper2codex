@@ -7,7 +7,7 @@ import sys
 import tempfile
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from PySide6.QtCore import QUrl, QMetaObject, Qt, qInstallMessageHandler, QtMsgType
+from PySide6.QtCore import QUrl, QMetaObject, Qt, qInstallMessageHandler, QtMsgType, QObject
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtWidgets import QApplication
@@ -22,6 +22,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--output',type=Path,default=Path('artifacts/visual'))
     parser.add_argument('--sizes',default='1920x1080,1366x768')
+    parser.add_argument('--catalogs',action='store_true')
     args=parser.parse_args()
     args.output.mkdir(parents=True,exist_ok=True)
     if sys.platform=='win32' and os.environ.get('QT_QPA_PLATFORM')=='offscreen':
@@ -36,7 +37,11 @@ def main():
     report={'screens':[],'qml_errors':warnings,'scale_factor':os.environ.get('QT_SCALE_FACTOR','1'),'platform':app.platformName()}
     with tempfile.TemporaryDirectory(prefix='oper-visual-') as temp:
         store=Store(Path(temp)/'review.sqlite')
-        master,text=prepare(store,temp)
+        if args.catalogs:
+            from tools.catalog_fixture import prepare as catalog_prepare
+            master,text,import_path=catalog_prepare(store,temp)
+        else:
+            master,text=prepare(store,temp)
         backend=Controller(store,temp,os.environ.get('GITHUB_SHA','development'))
         backend.command('create_event',json.dumps({'id':master['id']}))
         backend.command('create_event',json.dumps({'id':master['id']}))
@@ -54,13 +59,26 @@ def main():
             root.resize(width,height)
             for theme in ['dark','light']:
                 backend.command('theme',json.dumps({'name':theme}))
-                for page in ['home','events','history','builder','settings','logs']:
-                    root.setProperty('page',page)
+                for page in (['home','events','builder','catalog','catalog-manager','scenario-import'] if args.catalogs else ['home','events','history','builder','settings','logs']):
+                    for name in ['catalogSearchDialog','catalogManagerDialog','scenarioImportDialog']:
+                        popup=root.findChild(QObject,name)
+                        if popup.property('visible'): QMetaObject.invokeMethod(popup,'close',Qt.DirectConnection)
+                    root.setProperty('page',page if page in ['home','events','builder','history','settings','logs'] else 'home')
                     QTest.qWait(120)
                     current=root.property('activePage')
                     if page in ['events','builder']:
                         QMetaObject.invokeMethod(current,'focusContents' if page=='events' else 'fitContents',Qt.DirectConnection)
                         if page=='builder': current.setProperty('linkMode',True)
+                    if page in ['catalog','catalog-manager','scenario-import']:
+                        method={'catalog':'openAllScenarios','catalog-manager':'manageCatalogs','scenario-import':'importScenarios'}[page]
+                        if page=='scenario-import':
+                            backend.command('preview_scenarios',json.dumps({'path':str(import_path)}))
+                        QMetaObject.invokeMethod(root,method,Qt.DirectConnection)
+                        QTest.qWait(80)
+                        if page=='catalog':
+                            root.findChild(QObject,'catalogQuery').setProperty('text','КМ 1')
+                            QMetaObject.invokeMethod(root.findChild(QObject,'catalogSearchDialog'),'refresh',Qt.DirectConnection)
+                        elif page=='scenario-import': root.findChild(QObject,'scenarioImportPath').setProperty('text',str(import_path))
                     QTest.qWait(100)
                     image=root.grabWindow()
                     if image.isNull(): raise RuntimeError('Empty screenshot: '+page)

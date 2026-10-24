@@ -17,6 +17,8 @@ from .domain import (new_master, new_block, uid, duplicate_master, validate_conf
                      editor_template, editor_token, parse_editor_template)
 from .files import DocumentService, ReferenceService, scan, atomic_copy
 from .theme import theme, ThemeManager
+from . import catalog, scenario_import
+from .static_text import presentation
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +39,8 @@ class Controller(QObject):
         self.commit = commit
         self.themes = ThemeManager(store, self)
         self.block_clipboard = []
+        self.import_proposal = None
+        self.import_token = ""
         self.active = next((e["id"] for e in store.events() if e["visible"] and not e["archived"]), "")
         self.selected_master = store.config("draft")[1]["masters"][0]["id"] if store.config("draft")[1]["masters"] else ""
         self.selected_block = ""
@@ -61,6 +65,8 @@ class Controller(QObject):
                     block["tokens"] = inline_tokens(segments)
                     block["preview"] = render(segments, local["values"])
                     block["validation"] = "\n".join(validate_values(segments, local["values"]))
+                elif block["type"] == "static_text":
+                    block["static"] = presentation(block["config"])
                 elif block["type"] == "documents":
                     block["files"] = self.documents.files(local)
                 elif block["type"] == "reference":
@@ -75,7 +81,10 @@ class Controller(QObject):
                   "published": published, "configVersion": version,
                   "draft": draft, "master": current_master, "selectedBlock": selected, "event": event,
                   "events": self.store.events(), "canUndo": bool(self.undo_stack), "canRedo": bool(self.redo_stack),
-                  "logs": self.store.logs(), "dataDir": str(self.data_dir)}
+                  "logs": self.store.logs(), "dataDir": str(self.data_dir),
+                  "catalogFavorites": self.store.pref("catalog_favorites", []),
+                  "catalogRecent": self.store.pref("catalog_recent", []),
+                  "importPreview": ({k: v for k, v in self.import_proposal.items() if k != "masters"} | {"token": self.import_token}) if self.import_proposal else None}
         if selected and selected["type"] == "text":
             result["templateSource"], result["templateFields"] = editor_template(selected["config"]["segments"])
         return result
@@ -105,15 +114,17 @@ class Controller(QObject):
         try:
             args = json.loads(payload)
             self._command(action, args)
-            if action in {"create_event", "select_event", "hide_event", "archive_event", "copy_text", "copy_phone", "copy_files", "open_document", "repair_document", "preview"}:
+            if action in {"create_event", "launch_catalog", "select_event", "hide_event", "archive_event", "copy_text", "copy_static", "copy_phone", "copy_files", "open_document", "repair_document", "preview"}:
                 identity = args.get("id") if action in {"select_event", "hide_event", "archive_event"} else self.active
-                messages = {"create_event":"Создана карточка происшествия", "select_event":"Открыта карточка", "hide_event":"Вкладка скрыта", "archive_event":"Происшествие архивировано", "copy_text":"Сообщение скопировано", "copy_phone":"Номер скопирован", "copy_files":"Файлы помещены в буфер", "open_document":"Открыта рабочая копия", "repair_document":"Рабочая копия восстановлена из оригинала", "preview":"Открыта безопасная копия справочного файла"}
+                messages = {"create_event":"Создана карточка происшествия", "launch_catalog":"Сценарий запущен из каталога", "copy_static":"Свободный текст скопирован", "select_event":"Открыта карточка", "hide_event":"Вкладка скрыта", "archive_event":"Происшествие архивировано", "copy_text":"Сообщение скопировано", "copy_phone":"Номер скопирован", "copy_files":"Файлы помещены в буфер", "open_document":"Открыта рабочая копия", "repair_document":"Рабочая копия восстановлена из оригинала", "preview":"Открыта безопасная копия справочного файла"}
                 if identity:
                     self.store.record_action(identity, messages[action])
-            if action not in {"phrase", "copy_text", "copy_phone", "copy_files", "open_folder", "open_parent", "open_document", "preview", "backup", "export", "copy_blocks"}:
+            if action not in {"phrase", "copy_text", "copy_static", "copy_phone", "copy_files", "open_folder", "open_parent", "open_document", "preview", "backup", "export", "copy_blocks", "import_sample"}:
                 self.stateChanged.emit()
             return True
         except Exception as exc:
+            if action == "preview_scenarios":
+                self.stateChanged.emit()
             log.exception("Операция %s не выполнена", action)
             with self.store.db:
                 self.store.log("ERROR", f"{action}: {exc}")
@@ -121,10 +132,54 @@ class Controller(QObject):
             return False
 
     def _command(self, action, a):
-        if action == "create_event":
+        if action in {"create_event", "launch_catalog"}:
+            if action == "launch_catalog" and a.get("catalog"):
+                _, config = self.store.config()
+                selected = next(c for c in config.get("catalogs", []) if c["id"] == a["catalog"])
+                if a["id"] not in selected["members"]:
+                    raise ValueError("Сценарий не входит в опубликованный каталог")
             event = self.store.create_event(a["id"])
             self.active = event["id"]
             self.documents.initialize(self.active)
+            recent = self.store.pref("catalog_recent", [])
+            self.store.set_pref("catalog_recent", [a["id"], *[i for i in recent if i != a["id"]]][:100])
+        elif action == "catalog_favorite":
+            if not any(m["id"] == a["id"] for m in self.store.config()[1]["masters"]):
+                raise ValueError("Сценарий не найден")
+            favorites = self.store.pref("catalog_favorites", [])
+            if a["id"] in favorites:
+                favorites.remove(a["id"])
+            else:
+                favorites.append(a["id"])
+            self.store.set_pref("catalog_favorites", favorites)
+        elif action == "new_catalog":
+            item = catalog.new_catalog()
+            self.change_draft(lambda c: c.setdefault("catalogs", []).append(item))
+        elif action == "save_catalog":
+            def save_catalog(c):
+                item = next(i for i in c.get("catalogs", []) if i["id"] == a["id"])
+                item.update({key: copy.deepcopy(a[key]) for key in ("name", "icon", "color", "opening", "members")})
+            self.change_draft(save_catalog)
+        elif action == "delete_catalog":
+            self.change_draft(lambda c: c.update(catalogs=[i for i in c.get("catalogs", []) if i["id"] != a["id"]]))
+        elif action == "preview_scenarios":
+            self.import_proposal = None
+            self.import_token = ""
+            self.import_proposal = scenario_import.prepare(a["path"], self.store.config("draft")[1])
+            self.import_token = uid()
+        elif action == "cancel_scenario_import":
+            self.import_proposal = None
+            self.import_token = ""
+        elif action == "commit_scenarios":
+            if not self.import_proposal or a.get("token") != self.import_token or a.get("confirmed") is not True:
+                raise ValueError("Сначала проверьте таблицу и подтвердите импорт")
+            self.change_draft(lambda c: scenario_import.apply(c, self.import_proposal, a.get("catalog", "")))
+            self.import_proposal = None
+            self.import_token = ""
+            self.notice.emit("Корректные строки добавлены в черновик. Опубликуйте конфигурацию для запуска сценариев.")
+        elif action == "import_sample":
+            path = scenario_import.sample(a["path"])
+            self.notice.emit("Шаблон XLSX создан: " + path)
         elif action == "select_event":
             self.store.visibility(a["id"], True, False)
             self.active = a["id"]
@@ -147,12 +202,19 @@ class Controller(QObject):
             self.change_draft(lambda c: c["masters"].append(master))
             self.selected_master, self.selected_block = master["id"], ""
         elif action == "delete_master":
-            self.change_draft(lambda c: c["masters"].remove(self.master(c)))
+            def remove_master(c):
+                c["masters"].remove(self.master(c))
+                for item in c.get("catalogs", []):
+                    item["members"] = [i for i in item["members"] if i != self.selected_master]
+            self.change_draft(remove_master)
             self.selected_master = next((m["id"] for m in self.store.config("draft")[1]["masters"]), "")
             self.selected_block = ""
         elif action == "save_master":
             def update(c):
                 self.master(c).update(name=a["name"], tag=a["tag"], icon=a["icon"], color=a["color"])
+                for key in ("aliases", "tags", "category", "km_code"):
+                    if key in a:
+                        self.master(c)[key] = copy.deepcopy(a[key])
             self.change_draft(update)
         elif action == "add_block":
             block = new_block(a["type"])
@@ -181,7 +243,9 @@ class Controller(QObject):
             self.selected_block = ""
         elif action == "geometry":
             def geometry(c):
-                self.block(c, a["id"]).update(x=max(0, a["x"]), y=max(0, a["y"]), width=max(320, a["width"]), height=max(260, a["height"]))
+                block = self.block(c, a["id"])
+                min_width, min_height = (240, 180) if block["type"] == "static_text" else (320, 260)
+                block.update(x=max(0, a["x"]), y=max(0, a["y"]), width=max(min_width, a["width"]), height=max(min_height, a["height"]))
             self.change_draft(geometry)
             self.selected_block = a["id"]
         elif action == "geometry_batch":
@@ -270,6 +334,11 @@ class Controller(QObject):
             if errors:
                 self.notice.emit("Проверьте сообщение перед отправкой:\n" + "\n".join(errors))
             QGuiApplication.clipboard().setText(render(segments, state["values"]))
+        elif action == "copy_static":
+            _, block, _ = self.event_block(a["id"])
+            if block["type"] != "static_text" or not block["config"].get("copy_enabled", True):
+                raise ValueError("Копирование для этого блока отключено")
+            QGuiApplication.clipboard().setText(presentation(block["config"])["plain"])
         elif action == "copy_phone":
             QGuiApplication.clipboard().setText(a["phone"])
         elif action == "phrase":
@@ -436,6 +505,14 @@ class Controller(QObject):
     @Slot(str, result=str)
     def localPath(self, url):
         return QUrl(url).toLocalFile()
+
+    @Slot(str, str, str, str, result="QVariantList")
+    def searchCatalog(self, identity, query, category, mode):
+        try:
+            return catalog.search(self.store.config()[1], identity, query, category, mode,
+                                  self.store.pref("catalog_favorites", []), self.store.pref("catalog_recent", []))
+        except (StopIteration, KeyError):
+            return []
 
     @Slot(str, result="QVariantList")
     def eventHistory(self, identity):
