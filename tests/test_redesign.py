@@ -192,7 +192,17 @@ def test_designer_creates_field_from_actual_mouse_selection(gui):
     QTest.mouseRelease(root,Qt.LeftButton,Qt.NoModifier,b)
     assert source.property('selectedText')=='Перевозчик'
     visual_child(root.contentItem(),'newFieldLabel').setProperty('text','Перевозчик')
-    QTest.mouseClick(root,Qt.LeftButton,Qt.NoModifier,center(visual_child(root.contentItem(),'createTemplateField')))
+    button=visual_child(root.contentItem(),'createTemplateField')
+    viewport=visual_child(root.contentItem(),'builderProperties')
+    flickable=viewport.property('contentItem')
+    bottom=button.mapToItem(viewport,QPointF(0,button.height())).y()
+    if bottom>viewport.height():
+        flickable.setProperty('contentY',flickable.property('contentY')+bottom-viewport.height()+8)
+        QTest.qWait(70)
+    point=button.mapToItem(viewport,QPointF(button.width()/2,button.height()/2))
+    assert 0<point.x()<viewport.width() and 0<point.y()<viewport.height()
+    assert source.property('selectedText')=='Перевозчик'
+    QTest.mouseClick(root,Qt.LeftButton,Qt.NoModifier,center(button))
     inspector=visual_child(root.contentItem(),'blockInspector')
     QMetaObject.invokeMethod(inspector,'save',Qt.DirectConnection)
     cfg=c.state['selectedBlock']['config']

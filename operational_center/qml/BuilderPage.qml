@@ -239,7 +239,7 @@ ColumnLayout {
         Rectangle {
             visible: view.showInspector
             Layout.preferredWidth: Theme.inspector; Layout.fillHeight: true; color: Theme.panel; border.color: Theme.border; radius: Theme.radius
-            ScrollView { id: properties; anchors.fill: parent; anchors.margins: Theme.s12; contentWidth: availableWidth; clip: true
+            ScrollView { id: properties; objectName: "builderProperties"; anchors.fill: parent; anchors.margins: Theme.s12; contentWidth: availableWidth; clip: true
                 Loader { width: properties.availableWidth; sourceComponent: shell.state.selectedBlock ? blockProperties : masterProperties }
             }
         }
