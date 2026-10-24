@@ -26,6 +26,10 @@ def visual_child(item, name):
     return None
 
 
+def visual_descendants(item):
+    return [item]+[entry for child in item.childItems() for entry in visual_descendants(child)]
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--output',type=Path,default=Path('artifacts/visual'))
@@ -99,6 +103,9 @@ def main():
                     if args.text_layout:
                         # Capture the actual rendered card as well as its window.
                         card=visual_child(root.contentItem(),'runtimeBlock-'+text['id'])
+                        labels=[item for item in visual_descendants(card) if item.objectName()=='protectedLiteral']
+                        if len(labels)!=6 or any(label.property('lineCount')!=1 for label in labels):
+                            raise RuntimeError('A standard template label wrapped unexpectedly')
                         capture=card.grabToImage()
                         QTest.qWait(100)
                         if not capture.saveToFile(str(args.output/f'{size}-{theme}-text-template.png')):

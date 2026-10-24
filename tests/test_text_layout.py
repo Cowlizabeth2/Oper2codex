@@ -64,6 +64,8 @@ def test_labels_are_plain_protected_text_and_values_stay_beside_them(document,ap
             # Short values must not scroll horizontally just because the font
             # resolved after the first layout pass.
             assert control.property('contentWidth')<=control.width()-control.property('leftPadding')-control.property('rightPadding')
+        if width==560:
+            assert label.property('lineCount')==1
         preset=visual_child(card,'presetButton-'+definition['id'])
         assert preset.isVisible()==bool(definition.get('phrases'))
         if preset.isVisible():

@@ -43,7 +43,7 @@ ColumnLayout {
             id: document
             width: scroll.availableWidth
             spacing: Theme.s8
-            property real labelWidth: { var effectiveFont=metrics.font;return Math.min(width*0.42,Math.max.apply(null,message.lines.map(function(line) {return line.simple ? metrics.advanceWidth(line.prefix) : 0}))) }
+            property real labelWidth: { var effectiveFont=metrics.font;return Math.min(width*0.42,Theme.s8+Math.max.apply(null,message.lines.map(function(line) {return line.simple ? metrics.advanceWidth(line.prefix) : 0}))) }
             FontMetrics { id: metrics; font: Qt.font({family:message.shell.font.family,pixelSize:Theme.fontSize}) }
             Repeater {
                 model: message.lines
