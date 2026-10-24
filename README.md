@@ -4,7 +4,7 @@
 
 [Исходное техническое задание](docs/TECHNICAL_SPEC.md) · [Актуальный редизайн 0.2 и изображения](docs/REDESIGN.md) · [История проверок версии 0.1](docs/VALIDATION.md).
 
-Историческая [Windows-сборка 0.1, 4674b65](https://github.com/Cowlizabeth2/Oper2codex/actions/runs/39664424157): 43 теста пройдены, исходный и упакованный EXE проходят функциональную проверку QML с кодом 0. Пакет доступен в Artifacts → OperationalCenter-Windows. Word/Excel, вставка в рабочие мессенджеры и целевой Windows 10/11 требуют ручной приёмки.
+[Скачать Windows-сборку 0.2](https://github.com/Cowlizabeth2/Oper2codex/actions/runs/40097314789): откройте **Artifacts → OperationalCenter-Windows**. 54 теста Windows, 36 визуальных снимков и проверка запуска собранного EXE пройдены. Распакуйте вложенный ZIP целиком и запустите `ЗАПУСТИТЬ.bat`. Word/Excel, вставка в рабочие мессенджеры и целевой Windows 10/11 требуют ручной приёмки.
 
 ## Редизайн 0.2
 
