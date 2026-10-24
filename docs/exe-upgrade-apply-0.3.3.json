@@ -1,0 +1,102 @@
+{
+  "ok": true,
+  "version": "0.3.3",
+  "checks": [],
+  "qml_errors": [],
+  "commit": "dcb9564223a95c125d4510dfcb6efa105e60e9af",
+  "upgrade": {
+    "phase": "apply",
+    "cases": [
+      {
+        "name": "historical-default",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "historical-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "value",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "value-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "text",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "text-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "placeholder",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "placeholder-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "duplicate-static",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "duplicate-static-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      }
+    ],
+    "commit": "dcb9564223a95c125d4510dfcb6efa105e60e9af",
+    "precreated_database": true,
+    "backups": [
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-3258a94c-e6f0-4ca5-933c-33eb877c4d47.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-cb368990-1c98-49bf-b3b7-d23231e22f2b.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-8c4a4e9c-ac09-4aad-8c0c-b9a81fdb54da.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-ee9337f5-87ed-40eb-8d28-8fdb2ab510a3.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-5adf4014-4449-4621-8d58-c211cb30ec11.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-319438d0-bb0c-4e1f-8d76-f6940f33b55b.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-aa1d9d7c-ace3-4fac-bdec-ad5c7aa65f61.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-3b1bd8c2-b3f6-4b31-9458-613913b01a03.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-183510f3-4813-4e76-9b07-e441e62767f3.sqlite",
+      "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\oper-exe-upgrade-gug_n02v\\old-profile\\backups\\before-template-migration-7d6fd3d7-31a4-4d16-9730-9d33fb49c2f9.sqlite"
+    ],
+    "ok": true,
+    "events_created": 0,
+    "untouched_records_preserved": true,
+    "fresh_template_ok": true,
+    "full_sha_ok": true,
+    "reopened_database": false
+  }
+}

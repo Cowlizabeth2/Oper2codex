@@ -1,0 +1,91 @@
+{
+  "ok": true,
+  "version": "0.3.3",
+  "checks": [],
+  "qml_errors": [],
+  "commit": "dcb9564223a95c125d4510dfcb6efa105e60e9af",
+  "upgrade": {
+    "phase": "verify",
+    "cases": [
+      {
+        "name": "historical-default",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "historical-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "value",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "value-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "text",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "text-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "placeholder",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "placeholder-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "duplicate-static",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      },
+      {
+        "name": "duplicate-static-place",
+        "same_event_id": true,
+        "same_field_id": true,
+        "displayed_value_ok": true,
+        "copy_ok": true
+      }
+    ],
+    "commit": "dcb9564223a95c125d4510dfcb6efa105e60e9af",
+    "precreated_database": true,
+    "backups": [],
+    "ok": true,
+    "events_created": 0,
+    "untouched_records_preserved": true,
+    "fresh_template_ok": true,
+    "full_sha_ok": true,
+    "reopened_database": true
+  }
+}
