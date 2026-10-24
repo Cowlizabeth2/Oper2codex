@@ -58,3 +58,15 @@ SQL-схема остаётся `user_version=1`. Каталоги хранят�
 | Предпросмотр Excel | [PNG](screenshots/catalog-dark-import.png) | [PNG](screenshots/catalog-light-import.png) |
 
 Windows workflow проверяет нативный GUI/clipboard, прежнюю и новую визуальные матрицы (72 PNG) и собранный EXE. Windows-снимки используют Qt offscreen и Segoe UI; реальный DPI Windows 10/11, Office/PDF и вставка в рабочие мессенджеры требуют проверки на целевом ПК. Все автотесты используют временные синтетические данные.
+
+## Windows-сборка 0.3 подтверждена
+
+[Успешный прогон 40102301107](https://github.com/Cowlizabeth2/Oper2codex/actions/runs/40102301107), код `2bc2e7e`: **74 passed**, источник и собранный EXE проходят 13 экранов/редакторов/окон и восемь сервисных проверок без ошибок QML. Все четыре визуальных отчёта успешны: 24 + 12 прежних экранов и 24 + 12 новых, с правильной геометрией/DPR и шрифтом Segoe UI.
+
+В Artifacts: `OperationalCenter-Windows` — готовая программа; `UI-review` — все 72 PNG и JSON-отчёты; `build-diagnostics` — результаты тестов и запуска.
+
+| Windows Qt offscreen, Segoe UI, 1366×768 | Тёмная тема | Светлая тема |
+|---|---|---|
+| Поиск КМ | [PNG](screenshots/windows-catalog-dark-search.png) | [PNG](screenshots/windows-catalog-light-search.png) |
+| Свободный текст | [PNG](screenshots/windows-catalog-dark-static.png) | [PNG](screenshots/windows-catalog-light-static.png) |
+| Предпросмотр Excel | [PNG](screenshots/windows-catalog-dark-import.png) | [PNG](screenshots/windows-catalog-light-import.png) |
