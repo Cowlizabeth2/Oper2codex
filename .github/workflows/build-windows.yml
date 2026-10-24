@@ -60,6 +60,8 @@ jobs:
           exit $LASTEXITCODE
       - name: Review both themes at desktop resolutions
         shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           Set-Location $env:OPER_BUILD_ROOT
           python tools/visual_review.py --output artifacts/visual --sizes 1920x1080,1366x768
@@ -68,6 +70,7 @@ jobs:
         shell: pwsh
         env:
           QT_SCALE_FACTOR: '1.25'
+          QT_QPA_PLATFORM: offscreen
         run: |
           Set-Location $env:OPER_BUILD_ROOT
           python tools/visual_review.py --output artifacts/visual-125 --sizes 1366x768

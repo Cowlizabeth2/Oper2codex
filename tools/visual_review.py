@@ -28,7 +28,7 @@ def main():
     def handler(kind,context,message):
         if kind in [QtMsgType.QtWarningMsg,QtMsgType.QtCriticalMsg,QtMsgType.QtFatalMsg]: warnings.append(message)
     old=qInstallMessageHandler(handler)
-    report={'screens':[],'qml_errors':warnings,'scale_factor':os.environ.get('QT_SCALE_FACTOR','1')}
+    report={'screens':[],'qml_errors':warnings,'scale_factor':os.environ.get('QT_SCALE_FACTOR','1'),'platform':app.platformName()}
     with tempfile.TemporaryDirectory(prefix='oper-visual-') as temp:
         store=Store(Path(temp)/'review.sqlite')
         master,text=prepare(store,temp)

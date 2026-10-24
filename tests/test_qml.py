@@ -49,12 +49,14 @@ def test_real_mouse_drag_resize_and_window_resize_preserve_coordinates(app, stor
         # into view rather than injecting a click outside the screen.
         viewport = visual_child(root.contentItem(), "builderViewport")
         flickable = viewport.property("contentItem")
-        flickable.setProperty("contentX", max(0, moved["x"] + moved["width"] - 380))
-        flickable.setProperty("contentY", max(0, moved["y"] + moved["height"] - 220))
+        flickable.setProperty("contentX", max(0, moved["x"] + moved["width"] - min(380,viewport.width()/2)))
+        flickable.setProperty("contentY", max(0, moved["y"] + moved["height"] - min(220,viewport.height()/2)))
         QTest.qWait(100)
         handle = visual_child(root.contentItem(), "resizeHandle-" + identity)
         assert handle is not None
         start = handle.mapToScene(QPointF(handle.width()/2, handle.height()/2)).toPoint()
+        local=handle.mapToItem(viewport,QPointF(handle.width()/2,handle.height()/2))
+        assert 0<local.x()<viewport.width() and 0<local.y()<viewport.height()
         QTest.mousePress(root, Qt.LeftButton, Qt.NoModifier, start)
         assert handle.property("pressed"), {"pointer": (start.x(),start.y()), "window": (root.width(),root.height()), "canvasOffset": (flickable.property("contentX"),flickable.property("contentY"))}
         QTest.mouseMove(root, start + QPoint(20, 20), 30)
