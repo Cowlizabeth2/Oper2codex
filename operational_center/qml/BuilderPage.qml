@@ -204,8 +204,8 @@ ColumnLayout {
                             property bool north: modelData.indexOf("n")>=0
                             property bool south: modelData.indexOf("s")>=0
                             property real hit: Theme.resizeHit/viewport.zoom
-                            x: west ? -hit/2 : east ? tile.width-hit/2 : hit/2
-                            y: north ? -hit/2 : south ? tile.height-hit/2 : hit/2
+                            x: west ? 0 : east ? tile.width-hit : hit/2
+                            y: north ? 0 : south ? tile.height-hit : hit/2
                             width: west || east ? hit : tile.width-hit
                             height: north || south ? hit : tile.height-hit
                             preventStealing: true
