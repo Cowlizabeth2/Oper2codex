@@ -15,7 +15,7 @@ Dialog {
     title: "Каталоги мастер-сценариев · черновик"; modal: true; standardButtons: Dialog.Close
     function loadSelected() {
         if(!selected) return
-        nameInput.text=selected.name;iconInput.text=selected.icon;colorInput.text=selected.color;opening.currentIndex=selected.opening==="wide" ? 1 : 0;members=selected.members.slice()
+        nameInput.text=selected.name;iconInput.text=selected.icon;colorInput.text=selected.color;opening.currentIndex=Math.max(0,["compact","wide","panel"].indexOf(selected.opening));members=selected.members.slice()
     }
     function toggle(id) { var a=members.slice(),at=a.indexOf(id);if(at<0)a.push(id);else a.splice(at,1);members=a }
     onSelectedIdChanged: loadSelected()
@@ -31,7 +31,7 @@ Dialog {
                 Input { id: iconInput; Layout.preferredWidth: Theme.px(80); placeholderText: "Значок" }
                 Input { id: colorInput; Layout.preferredWidth: Theme.px(110); placeholderText: "#RRGGBB" }
             }
-            Choice { id: opening; Layout.fillWidth: true; model: ["Компактное окно поиска","Широкое окно поиска"] }
+            Choice { id: opening; Layout.fillWidth: true; model: ["Компактное окно поиска","Широкое окно поиска","Боковая панель без блокировки окна"] }
             Input { id: memberQuery; Layout.fillWidth: true; placeholderText: "Найти мастер для добавления · название или системный код" }
             RowLayout { Layout.fillWidth: true
                 Label { text: dialog.members.length+" сценариев в каталоге"; color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.fillWidth: true }
@@ -47,7 +47,7 @@ Dialog {
             RowLayout { Layout.fillWidth: true
                 ActionButton { text: "Удалить каталог"; danger: true; onClicked: { var id=dialog.selectedId;dialog.shell.confirm("Удалить каталог? Мастера и происшествия сохранятся.",function(){if(dialog.shell.run("delete_catalog",{id:id})){dialog.selectedId=dialog.catalogs.length?dialog.catalogs[0].id:"";dialog.loadSelected()}}) } }
                 Item { Layout.fillWidth: true }
-                ActionButton { text: "Сохранить каталог"; objectName: "saveCatalog"; primary: true; onClicked: dialog.shell.run("save_catalog",{id:dialog.selectedId,name:nameInput.text,icon:iconInput.text,color:colorInput.text,opening:["compact","wide"][opening.currentIndex],members:dialog.members}) }
+                ActionButton { text: "Сохранить каталог"; objectName: "saveCatalog"; primary: true; onClicked: dialog.shell.run("save_catalog",{id:dialog.selectedId,name:nameInput.text,icon:iconInput.text,color:colorInput.text,opening:["compact","wide","panel"][opening.currentIndex],members:dialog.members}) }
             }
         }
         Label { text: "После настройки опубликуйте черновик в конструкторе."; color: Theme.muted; font.pixelSize: Theme.smallSize }

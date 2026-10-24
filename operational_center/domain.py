@@ -242,7 +242,7 @@ def validate_config(config):
                 or not isinstance(catalog.get("name"), str) or not catalog["name"].strip()
                 or not isinstance(catalog.get("icon", ""), str)
                 or not re.fullmatch(r"#[0-9a-fA-F]{6}", catalog.get("color", ""))
-                or catalog.get("opening", "compact") not in {"compact", "wide"}
+                or catalog.get("opening", "compact") not in {"compact", "wide", "panel"}
                 or not isinstance(members, list) or len(members) != len(set(members))
                 or not set(members) <= masters):
             raise ValueError("Некорректный каталог или ссылки на мастер-блоки")

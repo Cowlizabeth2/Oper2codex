@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from openpyxl import Workbook
-from PySide6.QtCore import QUrl, QPointF, Qt, QMetaObject
+from PySide6.QtCore import QUrl, QPointF, Qt, QMetaObject, QObject
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtTest import QTest
 
@@ -288,9 +288,13 @@ def gui(app, store, tmp_path, catalog_config):
     assert not errors
 
 
-def test_catalog_gui_300_keyboard_search_enter_escape_and_favorites(gui, app):
+@pytest.mark.parametrize('opening',['compact','wide','panel'])
+def test_catalog_gui_300_keyboard_search_enter_escape_and_favorites(gui, app, opening):
     c,root,(_,masters,cat,_,text,_) = gui
+    run(c,'save_catalog',**{**cat,'opening':opening});run(c,'publish');QTest.qWait(50)
     click(root,visual_child(root.contentItem(),'catalogCard-'+cat['id']))
+    popup=root.findChild(QObject,'catalogSearchDialog')
+    assert popup.property('modal')==(opening!='panel')
     query=visual_child(root.contentItem(),'catalogQuery')
     assert query is not None
     app.clipboard().setText('СЕМЕНОВСКАЯ')

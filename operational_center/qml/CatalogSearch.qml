@@ -10,10 +10,11 @@ Dialog {
     property var results: []
     property var categories: [""]
     parent: Overlay.overlay
-    anchors.centerIn: parent
-    width: Math.min(parent.width-Theme.s32,Theme.px(catalog.opening==="wide" ? 960 : 680))
-    height: Math.min(parent.height-Theme.s32,Theme.px(600))
-    modal: true
+    x: catalog.opening==="panel" ? parent.width-width-Theme.s16 : (parent.width-width)/2
+    y: catalog.opening==="panel" ? Theme.s16 : (parent.height-height)/2
+    width: Math.min(parent.width-Theme.s32,Theme.px(catalog.opening==="wide" ? 960 : catalog.opening==="panel" ? 440 : 680))
+    height: catalog.opening==="panel" ? parent.height-Theme.s32 : Math.min(parent.height-Theme.s32,Theme.px(600))
+    modal: catalog.opening!=="panel"
     title: catalog.name
     standardButtons: Dialog.Close
     closePolicy: Popup.CloseOnEscape
