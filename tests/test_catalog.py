@@ -237,6 +237,40 @@ def test_excel_sample_and_duplicate_headers(store, tmp_path):
     with pytest.raises(ValueError,match='Повторяющийся'): prepare(tmp_path/'bad.xlsx',store.config('draft')[1])
 
 
+def test_excel_numeric_zero_is_a_valid_code_not_an_empty_cell(store, tmp_path):
+    file=workbook(tmp_path/'numeric.xlsx',[[0,0,'','','','','dtp',0]])
+    proposal=prepare(file,store.config('draft')[1])
+    assert proposal['valid']==1
+    master=proposal['masters'][0]
+    assert master['name']==master['tag']==master['km_code']=='0'
+
+
+def test_excel_300_scenarios_relink_clones_and_preserve_existing_data(app, store, tmp_path, configured):
+    master, _, _, _ = configured
+    c=Controller(store,tmp_path)
+    original=copy.deepcopy(store.config('draft')[1]['masters'])
+    run(c,'create_event',id=master['id'])
+    event_before=store.event(c.active)
+    run(c,'new_catalog');catalog=c.state['draft']['catalogs'][0]
+    file=workbook(tmp_path/'bulk.xlsx',[[f'Станция {n}',f'bulk_{n}','метро',f'Алиас {n}','Линия 1','',master['tag'],f'КМ {n}'] for n in range(1,301)])
+    run(c,'preview_scenarios',path=str(file))
+    preview=c.state['importPreview'];assert preview['valid']==300 and preview['invalid']==0
+    run(c,'commit_scenarios',token=preview['token'],confirmed=True,catalog=catalog['id'])
+    draft=store.config('draft')[1]
+    assert draft['masters'][:len(original)]==original
+    imported=draft['masters'][len(original):]
+    assert {m['tag'] for m in imported}=={f'bulk_{n}' for n in range(1,301)}
+    assert len({b['id'] for m in imported for b in m['blocks']})==300
+    assert all(m['links']==[m['blocks'][0]['id']] for m in imported)
+    assert set(draft['catalogs'][0]['members'])=={m['id'] for m in imported}
+    assert store.event(event_before['id'])==event_before
+    run(c,'publish')
+    assert len(c.searchCatalog(catalog['id'],'','','all'))==300
+    run(c,'undo')
+    assert store.config('draft')[1]['masters']==original
+    assert len(c.searchCatalog(catalog['id'],'','','all'))==300  # Undo changes only the draft.
+
+
 @pytest.fixture
 def gui(app, store, tmp_path, catalog_config):
     c=Controller(store,tmp_path)

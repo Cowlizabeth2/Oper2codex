@@ -20,7 +20,7 @@ HEADERS = {
     "aliases": ["альтернативные названия", "алиасы"],
     "category": ["категория", "категория или линия", "линия"],
     "documents": ["путь к папке документов", "папка документов"],
-    "template": ["шаблон мастер-сценария", "шаблон", "сценарий-шаблон"],
+    "template": ["шаблон мастер-сценария", "шаблон", "сценарий-шаблон", "шаблон мастер-сценария, который нужно использовать"],
     "km_code": ["код км", "км"],
 }
 
@@ -70,7 +70,7 @@ def prepare(path, config):
             raise ValueError("Обязательные столбцы: название, системный код, шаблон мастер-сценария")
         raw = []
         for number, cells in enumerate(rows, 2):
-            values = {key: str(cells[index].value or "").strip() for key, index in mapping.items()}
+            values = {key: str(cells[index].value if cells[index].value is not None else "").strip() for key, index in mapping.items()}
             if not any(values.values()):
                 continue
             formula = any(cells[index].data_type == "f" for index in mapping.values())
