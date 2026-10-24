@@ -11,6 +11,7 @@ from PySide6.QtCore import QUrl, QMetaObject, Qt, qInstallMessageHandler, QtMsgT
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QFontInfo
 from PySide6.QtTest import QTest
 from operational_center.storage import Store
 from operational_center.controller import Controller
@@ -23,6 +24,10 @@ def main():
     parser.add_argument('--sizes',default='1920x1080,1366x768')
     args=parser.parse_args()
     args.output.mkdir(parents=True,exist_ok=True)
+    if sys.platform=='win32' and os.environ.get('QT_QPA_PLATFORM')=='offscreen':
+        # The offscreen plugin uses Qt's basic font database, not the native
+        # Windows font service. Point it at the fonts already on this runner.
+        os.environ.setdefault('QT_QPA_FONTDIR',str(Path(os.environ.get('WINDIR',r'C:\Windows'))/'Fonts'))
     app=QApplication.instance() or QApplication([])
     warnings=[]
     def handler(kind,context,message):
@@ -41,6 +46,8 @@ def main():
         engine.load(QUrl.fromLocalFile(str(Path(__file__).resolve().parents[1]/'operational_center/qml/Main.qml')))
         if not engine.rootObjects(): raise RuntimeError('QML failed to load')
         root=engine.rootObjects()[0]
+        report['requested_font']=root.property('font').family()
+        report['resolved_font']=QFontInfo(root.property('font')).family()
         root.setPosition(0,0)
         for size in args.sizes.split(','):
             width,height=map(int,size.split('x'))
