@@ -54,7 +54,7 @@ def test_real_mouse_drag_resize_and_window_resize_preserve_coordinates(app, stor
         QTest.qWait(100)
         handle = visual_child(root.contentItem(), "resizeHandle-" + identity)
         assert handle is not None
-        start = handle.mapToScene(QPointF(10, 10)).toPoint()
+        start = handle.mapToScene(QPointF(handle.width()/2, handle.height()/2)).toPoint()
         QTest.mousePress(root, Qt.LeftButton, Qt.NoModifier, start)
         QTest.mouseMove(root, start + QPoint(20, 20), 30)
         QTest.mouseMove(root, start + QPoint(60, 50), 30)

@@ -107,6 +107,19 @@ class Store:
         with self.db:
             self.db.execute("UPDATE events SET state=? WHERE id=?", (encode(state), identity))
 
+    def record_action(self, identity, message, key=""):
+        """Optional event-state extension; legacy snapshots need no rewrite."""
+        from datetime import datetime
+        event = self.event(identity)
+        history = event["state"].setdefault("_history", [])
+        entry = {"created": now(), "message": message, "key": key}
+        if key and history and history[-1].get("key") == key and (datetime.fromisoformat(entry["created"]) - datetime.fromisoformat(history[-1]["created"])).total_seconds() < 30:
+            history[-1] = entry
+        else:
+            history.append(entry)
+        event["state"]["_history"] = history[-500:]
+        self.save_state(identity, event["state"])
+
     def visibility(self, identity, visible=True, archived=None):
         with self.db:
             if archived is not None:

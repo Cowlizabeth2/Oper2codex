@@ -2,133 +2,142 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import "."
-
 ColumnLayout {
     id: editor
+    objectName: "blockInspector"
     required property var shell
     property var block: shell.state.selectedBlock
     property var fields: []
-    property string currentId: ""
+    property int fieldIndex: 0
+    property var selectedField: fields.length ? fields[Math.min(fieldIndex,fields.length-1)] : null
     property bool initialized: false
-    spacing: 10
+    property bool dirty: false
+    property string fingerprint: ""
+    property string loadedIdentity: ""
+    spacing: Theme.s12
     function loadBlock() {
-        if (!block) return
-        currentId = block.id
-        titleInput.text = block.title
-        if (block.type === "text") {
-            sourceArea.text = shell.state.templateSource || ""
-            fields = JSON.parse(JSON.stringify(shell.state.templateFields || []))
-        } else if (block.type === "contacts") {
-            contactsPath.text = block.config.path || ""
-            tagMapping.text = JSON.stringify(block.config.tag_map || {}, null, 2)
+        if(!block) return
+        var next=JSON.stringify([block.id,block.title,block.config,block.accent || ""])
+        if(next===fingerprint) return
+        var previous=loadedIdentity===block.id && selectedField ? selectedField.id : ""
+        loadedIdentity=block.id;fingerprint=next;titleInput.text=block.title;accent.text=block.accent || ""
+        if(block.type==="text") { sourceArea.text=shell.state.templateSource || "";fields=JSON.parse(JSON.stringify(shell.state.templateFields || []));fieldIndex=Math.max(0,fields.findIndex(function(f) { return f.id===previous }));loadField() }
+        else if(block.type==="contacts") { contactsPath.text=block.config.path || "";tagMapping.text=JSON.stringify(block.config.tag_map || {},null,2) }
+        else { sources.text=(block.config.sources || []).join("\n");extensions.text=(block.config.extensions || []).join(", ");recursive.checked=!!block.config.recursive;output.text=block.config.output || "" }
+        dirty=false
+    }
+    function loadField() {
+        if(!selectedField) return
+        fieldLabel.text=selectedField.label || "";fieldHint.text=selectedField.placeholder || "";fieldDefault.text=selectedField.default || "";phrases.text=(selectedField.phrases || []).join("\n")
+    }
+    function changeField(key,value) { if(selectedField) { selectedField[key]=value;dirty=true } }
+    function insert(area) {
+        var result=backend.insertField(area.text,area.selectionStart,area.selectionEnd,JSON.stringify(fields),newFieldLabel.text)
+        if(result.source!==undefined) { area.text=result.source;fields=result.fields;fieldIndex=fields.length-1;loadField();dirty=true }
+    }
+    function save() {
+        editor.forceActiveFocus()
+        var cfg
+        if(block.type==="text") { if(backend.saveTemplate(block.id,titleInput.text,sourceArea.text,JSON.stringify(fields),accent.text)) dirty=false;return }
+        if(block.type==="contacts") {
+            try { cfg={path:contactsPath.text,tag_map:JSON.parse(tagMapping.text)} } catch(e) { shell.confirm("Проверьте JSON соответствия тегов: "+e,function() {});return }
         } else {
-            sources.text = (block.config.sources || []).join("\n")
-            extensions.text = (block.config.extensions || []).join(", ")
-            recursive.checked = !!block.config.recursive
-            output.text = block.config.output || ""
+            cfg={sources:sources.text.split("\n").map(function(s) { return s.trim() }).filter(function(s) { return s.length>0 }),recursive:recursive.checked,extensions:extensions.text.split(",").map(function(s) { return s.trim() }).filter(function(s) { return s.length>0 })}
+            if(block.type==="documents") cfg.output=output.text
         }
+        if(shell.run("save_block",{id:block.id,title:titleInput.text,config:cfg,accent:accent.text})) dirty=false
     }
-    function changeField(index, key, value) { fields[index][key] = value }
-    Component.onCompleted: { initialized = true; loadBlock() }
-    onBlockChanged: if (initialized) loadBlock()
-    Label { text: "Настройки блока"; color: Theme.text; font.pixelSize: 20; font.bold: true }
-    Input { id: titleInput; Layout.fillWidth: true; placeholderText: "Название блока" }
-    RowLayout {
-        ActionButton { text: "Дублировать"; onClicked: shell.run("duplicate_block", {id:editor.block.id}) }
-        ActionButton { text: "Удалить…"; danger: true; onClicked: shell.confirm("Удалить этот экземпляр блока и его связь? Изменение затронет только черновик.", function() { shell.run("delete_block", {id:editor.block.id}) }) }
+    Component.onCompleted: { initialized=true;loadBlock() }
+    onBlockChanged: if(initialized) loadBlock()
+    RowLayout { Layout.fillWidth: true
+        Label { text: "Свойства блока"; color: Theme.text; font.pixelSize: Theme.headingSize; font.bold: true; Layout.fillWidth: true }
+        ActionButton { iconName: "copy"; quiet: true; tip: "Дублировать"; onClicked: shell.run("duplicate_block",{id:editor.block.id}) }
+        ActionButton { iconName: "trash"; quiet: true; danger: true; tip: "Удалить"; onClicked: shell.confirm("Удалить этот блок из черновика?",function() { shell.run("delete_block",{id:editor.block.id}) }) }
     }
-    ColumnLayout {
-        visible: editor.block && editor.block.type === "text"
-        Layout.fillWidth: true
-        spacing: 10
-        Label { text: "Произвольный текст шаблона"; color: Theme.text; font.bold: true }
-        Label { text: "Выделите любой фрагмент или поставьте курсор, затем добавьте поле. Маркеры [[UUID]] обозначают поля только в конструкторе."; color: Theme.muted; wrapMode: Text.Wrap; Layout.fillWidth: true; font.pixelSize: Theme.smallSize }
-        ScrollView {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 200
-            contentWidth: availableWidth
-            Area { id: sourceArea; width: parent.width; persistentSelection: true; placeholderText: "Введите произвольный текст…" }
+    Section { title: "Общее"
+        Input { id: titleInput; Layout.fillWidth: true; placeholderText: "Название блока"; onTextEdited: editor.dirty=true }
+        Label { text: editor.block ? ({text:"Текстовый шаблон",contacts:"Контакты Excel",documents:"Рабочие документы",reference:"Сопутствующие файлы"})[editor.block.type] : ""; color: Theme.muted; font.pixelSize: Theme.smallSize }
+    }
+    Section {
+        title: "Содержимое"; visible: editor.block && editor.block.type==="text"
+        Label { text: "Выделите фрагмент или поставьте курсор, чтобы создать поле."; color: Theme.muted; font.pixelSize: Theme.smallSize; wrapMode: Text.Wrap; Layout.fillWidth: true }
+        ScrollView { Layout.fillWidth: true; Layout.preferredHeight: Theme.px(160); contentWidth: availableWidth
+            Area { id: sourceArea; objectName: "templateSourceEditor"; persistentSelection: true; placeholderText: "Текст сообщения…"; onTextChanged: if(activeFocus) editor.dirty=true }
         }
-        Input { id: newFieldLabel; Layout.fillWidth: true; placeholderText: "Подпись нового поля" }
-        ActionButton {
-            text: "Добавить поле из выделения"
-            Layout.fillWidth: true
-            onClicked: {
-                var result = backend.insertField(sourceArea.text, sourceArea.selectionStart, sourceArea.selectionEnd, JSON.stringify(editor.fields), newFieldLabel.text)
-                if (result.source !== undefined) { sourceArea.text = result.source; editor.fields = result.fields }
+        Input { id: newFieldLabel; objectName: "newFieldLabel"; Layout.fillWidth: true; placeholderText: "Название нового поля" }
+        ActionButton { objectName: "createTemplateField"; text: "Создать поле ввода"; iconName: "plus"; Layout.fillWidth: true; onClicked: editor.insert(sourceArea) }
+        ActionButton { text: "Развернуть редактор"; iconName: "fit"; quiet: true; Layout.fillWidth: true; onClicked: templateDialog.open() }
+    }
+    Section {
+        title: "Поля"; visible: editor.block && editor.block.type==="text"
+        Choice { Layout.fillWidth: true; model: editor.fields; textRole: "label"; currentIndex: editor.fields.length ? editor.fieldIndex : -1; onActivated: { editor.fieldIndex=currentIndex;editor.loadField() } }
+        ColumnLayout { Layout.fillWidth: true; visible: !!editor.selectedField; spacing: Theme.s8
+            Input { id: fieldLabel; Layout.fillWidth: true; placeholderText: "Название поля"; onTextEdited: editor.changeField("label",text) }
+            Input { id: fieldHint; Layout.fillWidth: true; placeholderText: "Подсказка"; onTextEdited: editor.changeField("placeholder",text) }
+            Input { id: fieldDefault; Layout.fillWidth: true; placeholderText: "Предзаполнение"; onTextEdited: editor.changeField("default",text) }
+            Choice { Layout.fillWidth: true; model: ["Текст","Число","Дата ГГГГ-ММ-ДД"]; currentIndex: editor.selectedField ? ["text","number","date"].indexOf(editor.selectedField.type || "text") : 0; onActivated: editor.changeField("type",["text","number","date"][currentIndex]) }
+            Check { text: "Обязательное"; checked: !!editor.selectedField && !!editor.selectedField.required; onToggled: editor.changeField("required",checked) }
+            Check { text: "Многострочное"; checked: !!editor.selectedField && !!editor.selectedField.multiline; onToggled: editor.changeField("multiline",checked) }
+            ActionButton { text: "Преобразовать в обычный текст"; quiet: true; Layout.fillWidth: true; onClicked: { var f=editor.selectedField;sourceArea.text=sourceArea.text.split(f._editor_token || "[["+f.id+"]]").join(f.default || "");var a=editor.fields.slice();a.splice(editor.fieldIndex,1);editor.fields=a;editor.fieldIndex=0;editor.loadField();editor.dirty=true } }
+        }
+        Label { text: "Поля ещё не добавлены"; visible: editor.fields.length===0; color: Theme.muted; font.pixelSize: Theme.smallSize }
+    }
+    Section {
+        title: "Пресеты"; visible: editor.block && editor.block.type==="text" && !!editor.selectedField
+        Label { text: "Фразы выбранного поля · одна на строку"; color: Theme.muted; font.pixelSize: Theme.smallSize; wrapMode: Text.Wrap; Layout.fillWidth: true }
+        Area { id: phrases; Layout.fillWidth: true; implicitHeight: Theme.px(88); onTextChanged: if(activeFocus) editor.changeField("phrases",text.split("\n").filter(function(s) { return s.length>0 })) }
+        Choice { Layout.fillWidth: true; model: ["Заменять значение","Добавлять через пробел"]; currentIndex: editor.selectedField && editor.selectedField.phrase_mode==="append" ? 1 : 0; onActivated: editor.changeField("phrase_mode",currentIndex===1 ? "append" : "replace") }
+    }
+    Section {
+        title: "Источники данных"; visible: editor.block && editor.block.type==="contacts"
+        Input { id: contactsPath; Layout.fillWidth: true; placeholderText: "Путь к XLSX"; onTextEdited: editor.dirty=true }
+        ActionButton { text: "Подключить Excel…"; iconName: "file"; Layout.fillWidth: true; onClicked: shell.chooseFile(function(path) { contactsPath.text=path;editor.dirty=true },["Excel (*.xlsx)"]) }
+        ActionButton { text: "Создать справочник…"; iconName: "plus"; Layout.fillWidth: true; onClicked: shell.chooseFolder(function(path) { shell.run("create_contacts",{id:editor.block.id,folder:path}) }) }
+        ActionButton { text: "Открыть справочник"; iconName: "arrow"; quiet: true; Layout.fillWidth: true; enabled: contactsPath.text.length>0; onClicked: shell.run("open_folder",{path:contactsPath.text}) }
+        Label { text: "Теги Excel → системные теги (JSON)"; color: Theme.muted; font.pixelSize: Theme.smallSize }
+        Area { id: tagMapping; Layout.fillWidth: true; implicitHeight: Theme.px(88); placeholderText: '{"ДТП":"dtp"}'; onTextChanged: if(activeFocus) editor.dirty=true }
+    }
+    Section {
+        title: "Источники данных"; visible: editor.block && (editor.block.type==="documents" || editor.block.type==="reference")
+        Area { id: sources; Layout.fillWidth: true; implicitHeight: Theme.px(128); placeholderText: "Файл или папка · один путь на строку"; onTextChanged: if(activeFocus) editor.dirty=true }
+        RowLayout { Layout.fillWidth: true
+            ActionButton { text: "Файл"; iconName: "plus"; Layout.fillWidth: true; onClicked: shell.chooseFile(function(path) { sources.text+=(sources.text ? "\n" : "")+path;editor.dirty=true }) }
+            ActionButton { text: "Папка"; iconName: "plus"; Layout.fillWidth: true; onClicked: shell.chooseFolder(function(path) { sources.text+=(sources.text ? "\n" : "")+path;editor.dirty=true }) }
+        }
+        Check { id: recursive; text: "Включая вложенные папки"; onToggled: editor.dirty=true }
+        Input { id: extensions; Layout.fillWidth: true; placeholderText: "Расширения: docx, xlsx, pdf"; onTextEdited: editor.dirty=true }
+        Input { id: output; visible: editor.block && editor.block.type==="documents"; Layout.fillWidth: true; placeholderText: "Папка копий · пусто: данные приложения"; onTextEdited: editor.dirty=true }
+        ActionButton { visible: output.visible; text: "Папка рабочих копий…"; iconName: "reference"; Layout.fillWidth: true; onClicked: shell.chooseFolder(function(path) { output.text=path;editor.dirty=true }) }
+    }
+    Section { title: "Оформление"; expanded: false
+        Input { id: accent; objectName: "blockAccent"; Layout.fillWidth: true; placeholderText: "Цвет метки #RRGGBB · пусто: тема"; onTextEdited: editor.dirty=true }
+        ActionButton { text: "Сохранить оформление"; Layout.fillWidth: true; onClicked: editor.save() }
+    }
+    Label { text: editor.dirty ? "Есть несохранённые изменения" : "Настройки сохранены в черновике"; color: editor.dirty ? Theme.warning : Theme.muted; font.pixelSize: Theme.smallSize }
+    ActionButton { text: "Сохранить блок"; iconName: "save"; primary: true; Layout.fillWidth: true; onClicked: editor.save() }
+    Dialog {
+        id: templateDialog
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(parent.width-Theme.s32,Theme.px(960))
+        height: Math.min(parent.height-Theme.s32,Theme.px(640))
+        title: "Редактор текстового шаблона"
+        modal: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property string originalFields
+        onOpened: { largeArea.text=sourceArea.text;originalFields=JSON.stringify(editor.fields) }
+        onAccepted: { sourceArea.text=largeArea.text;editor.dirty=true }
+        onRejected: { editor.fields=JSON.parse(originalFields);editor.loadField() }
+        contentItem: ColumnLayout {
+            spacing: Theme.s12
+            Label { text: "Произвольный текст. Выделите фрагмент и создайте поле; маркеры обозначают редактируемые участки."; color: Theme.muted; font.pixelSize: Theme.fontSize; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            ScrollView { Layout.fillWidth: true; Layout.fillHeight: true; contentWidth: availableWidth
+                Area { id: largeArea; persistentSelection: true }
             }
-        }
-        Repeater {
-            model: editor.fields
-            delegate: Rectangle {
-                id: fieldCard
-                required property var modelData
-                required property int index
-                Layout.fillWidth: true
-                implicitHeight: fieldProperties.implicitHeight + 24
-                radius: Theme.radius
-                color: Theme.card
-                ColumnLayout {
-                    id: fieldProperties
-                    anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; anchors.margins: 12
-                    spacing: 6
-                    Label { text: "Поле " + (fieldCard.index + 1); color: Theme.accent; font.bold: true }
-                    Input { text: fieldCard.modelData.label || ""; placeholderText: "Подпись"; Layout.fillWidth: true; onEditingFinished: editor.changeField(fieldCard.index, "label", text) }
-                    Input { text: fieldCard.modelData.placeholder || ""; placeholderText: "Подсказка"; Layout.fillWidth: true; onEditingFinished: editor.changeField(fieldCard.index, "placeholder", text) }
-                    Input { text: fieldCard.modelData.default || ""; placeholderText: "Предзаполнение"; Layout.fillWidth: true; onEditingFinished: editor.changeField(fieldCard.index, "default", text) }
-                    ComboBox { Layout.fillWidth: true; model: ["Текст", "Число", "Дата ГГГГ-ММ-ДД"]; currentIndex: ["text","number","date"].indexOf(fieldCard.modelData.type || "text"); onActivated: editor.changeField(fieldCard.index,"type",["text","number","date"][currentIndex]) }
-                    CheckBox { text: "Обязательное"; checked: !!fieldCard.modelData.required; onToggled: editor.changeField(fieldCard.index,"required",checked) }
-                    CheckBox { text: "Многострочное"; checked: !!fieldCard.modelData.multiline; onToggled: editor.changeField(fieldCard.index,"multiline",checked) }
-                    Label { text: "Готовые фразы · одна на строку"; color: Theme.muted; font.pixelSize: Theme.smallSize }
-                    Area { text: (fieldCard.modelData.phrases || []).join("\n"); Layout.fillWidth: true; implicitHeight: 80; onTextChanged: if (activeFocus) editor.changeField(fieldCard.index,"phrases",text.split("\n").filter(function(v) { return v.length > 0 })) }
-                    ComboBox { Layout.fillWidth: true; model: ["Заменять значение", "Добавлять через пробел"]; currentIndex: fieldCard.modelData.phrase_mode === "append" ? 1 : 0; onActivated: editor.changeField(fieldCard.index,"phrase_mode",currentIndex === 1 ? "append" : "replace") }
-                    Label { text: fieldCard.modelData.id; color: Theme.muted; font.pixelSize: 10; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                }
-            }
-        }
-        ActionButton { text: "Сохранить шаблон"; primary: true; Layout.fillWidth: true; onClicked: { editor.forceActiveFocus(); backend.saveTemplate(editor.block.id, titleInput.text, sourceArea.text, JSON.stringify(editor.fields)) } }
-    }
-    ColumnLayout {
-        visible: editor.block && editor.block.type === "contacts"
-        Layout.fillWidth: true
-        spacing: 10
-        Label { text: "Справочник Excel"; color: Theme.text; font.bold: true }
-        Input { id: contactsPath; Layout.fillWidth: true; placeholderText: "Полный путь к XLSX" }
-        ActionButton { text: "Подключить существующий Excel…"; Layout.fillWidth: true; onClicked: shell.chooseFile(function(path) { contactsPath.text = path }, ["Excel (*.xlsx)"]) }
-        ActionButton { text: "Создать справочник контактов…"; Layout.fillWidth: true; onClicked: shell.chooseFolder(function(path) { shell.run("create_contacts", {id:editor.block.id,folder:path}) }) }
-        ActionButton { text: "Открыть справочник"; Layout.fillWidth: true; enabled: contactsPath.text.length > 0; onClicked: shell.run("open_folder", {path:contactsPath.text}) }
-        Label { text: "Соответствие Excel-тегов системным тегам (JSON)"; color: Theme.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
-        Area { id: tagMapping; Layout.fillWidth: true; implicitHeight: 110; placeholderText: '{"ДТП": "dtp", "Столица": "stolica"}' }
-        Label { text: "Ключ — понятный тег из Excel, значение — системный тег мастер-блока. Совпадение целиком, регистр и лишние пробелы не учитываются."; color: Theme.muted; wrapMode: Text.Wrap; Layout.fillWidth: true; font.pixelSize: Theme.smallSize }
-        ActionButton {
-            text: "Сохранить контакты"; primary: true; Layout.fillWidth: true
-            onClicked: { try { shell.run("save_block", {id:editor.block.id,title:titleInput.text,config:{path:contactsPath.text,tag_map:JSON.parse(tagMapping.text)}}) } catch(e) { shell.confirm("Проверьте формат JSON соответствия тегов: " + e, function() {}) } }
-        }
-    }
-    ColumnLayout {
-        visible: editor.block && (editor.block.type === "documents" || editor.block.type === "reference")
-        Layout.fillWidth: true
-        spacing: 10
-        Label { text: "Источники · один полный путь на строку"; color: Theme.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
-        Area { id: sources; Layout.fillWidth: true; implicitHeight: 150; placeholderText: "Файлы и папки" }
-        RowLayout {
-            ActionButton { text: "+ Файл…"; onClicked: shell.chooseFile(function(path) { sources.text += (sources.text ? "\n" : "") + path }) }
-            ActionButton { text: "+ Папка…"; onClicked: shell.chooseFolder(function(path) { sources.text += (sources.text ? "\n" : "") + path }) }
-        }
-        CheckBox { id: recursive; text: "Включая вложенные папки" }
-        Input { id: extensions; Layout.fillWidth: true; placeholderText: "Расширения: docx, xlsx, pdf (пусто — все)" }
-        Label { visible: editor.block && editor.block.type === "documents"; text: "Папка рабочих комплектов (пусто — в данных приложения)"; color: Theme.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
-        Input { id: output; visible: editor.block && editor.block.type === "documents"; Layout.fillWidth: true; placeholderText: "Папка вывода" }
-        ActionButton { visible: editor.block && editor.block.type === "documents"; text: "Выбрать папку вывода…"; Layout.fillWidth: true; onClicked: shell.chooseFolder(function(path) { output.text = path }) }
-        Label { text: editor.block && editor.block.type === "documents" ? "Все копии создаются автоматически при создании карточки. Исходники не изменяются." : "Просмотр открывает отдельную копию. «Копировать файлы» помещает файловые объекты в буфер Windows."; color: Theme.muted; wrapMode: Text.Wrap; Layout.fillWidth: true; font.pixelSize: Theme.smallSize }
-        ActionButton {
-            text: "Сохранить настройки файлов"; primary: true; Layout.fillWidth: true
-            onClicked: {
-                var cfg = {sources:sources.text.split("\n").map(function(s) { return s.trim() }).filter(function(s) { return s.length > 0 }),recursive:recursive.checked,extensions:extensions.text.split(",").map(function(s) { return s.trim() }).filter(function(s) { return s.length > 0 })}
-                if (editor.block.type === "documents") cfg.output = output.text
-                shell.run("save_block", {id:editor.block.id,title:titleInput.text,config:cfg})
+            RowLayout { Layout.fillWidth: true
+                ActionButton { text: "Создать поле ввода"; iconName: "plus"; onClicked: editor.insert(largeArea) }
+                Label { text: editor.fields.length+" полей"; color: Theme.muted; font.pixelSize: Theme.smallSize }
             }
         }
     }
-    Label { text: editor.block ? "UUID блока: " + editor.block.id : ""; color: Theme.muted; font.pixelSize: Theme.smallSize; wrapMode: Text.Wrap; Layout.fillWidth: true }
 }

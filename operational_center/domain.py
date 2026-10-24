@@ -39,7 +39,7 @@ def new_block(kind):
         "reference": {"sources": [], "recursive": False, "extensions": []},
     }[kind]
     return {"id": uid(), "type": kind, "title": LABELS[kind], "x": 36, "y": 36,
-            "width": 460, "height": 350, "config": config}
+            "width": 400, "height": 280, "config": config}
 
 
 def field(label="Поле", **options):
@@ -68,6 +68,44 @@ def parse_template(source, fields):
     if source[position:]:
         segments.append({"kind": "text", "text": source[position:]})
     return segments
+
+
+def editor_token(definition, number, occupied=""):
+    label = " ".join(definition.get("label", "Поле").split())[:32] or "Поле"
+    token = f"⟦{number} · {label}⟧"
+    while token in occupied:
+        number += 1
+        token = f"⟦{number} · {label}⟧"
+    return token
+
+
+def editor_template(segments):
+    """Readable editor markers are ephemeral; UUIDs remain the storage keys."""
+    fields = []
+    occupied = "".join(s.get("text", "") for s in segments if s["kind"] == "text")
+    parts = []
+    for segment in segments:
+        if segment["kind"] == "text":
+            parts.append(segment["text"])
+        else:
+            definition = copy.deepcopy(segment)
+            token = editor_token(definition, len(fields)+1, occupied)
+            occupied += token
+            definition["_editor_token"] = token
+            fields.append(definition)
+            parts.append(token)
+    return "".join(parts), fields
+
+
+def parse_editor_template(source, fields):
+    clean = []
+    for definition in fields:
+        definition = copy.deepcopy(definition)
+        token = definition.pop("_editor_token", None)
+        if token:
+            source = source.replace(token, "[["+definition["id"]+"]]")
+        clean.append(definition)
+    return parse_template(source, clean)
 
 
 def render(segments, values):
@@ -100,6 +138,28 @@ def apply_phrase(current, phrase, mode):
     return f"{current.rstrip()} {phrase}".strip() if mode == "append" else phrase
 
 
+def inline_tokens(segments):
+    """Presentation-only tokens. The original segments remain authoritative.
+
+    Splitting whitespace for wrapping never changes copy output or field UUIDs.
+    An explicit line-break token distinguishes a newline from automatic wrap.
+    """
+    result, line_start = [], True
+    for segment in segments:
+        if segment["kind"] == "field":
+            result.append({**segment, "token": "field"})
+            line_start = False
+        else:
+            for value in re.findall(r"\r\n|\r|\n|[^\S\r\n]+|[^\s]+", segment["text"]):
+                if value in {"\r\n", "\r", "\n"}:
+                    result.append({"token": "break", "blank": line_start, "text": value})
+                    line_start = True
+                else:
+                    result.append({"token": "static", "text": value})
+                    line_start = False
+    return result
+
+
 def validate_config(config):
     if not isinstance(config, dict) or config.get("format") != 1 or not isinstance(config.get("masters"), list):
         raise ValueError("Неподдерживаемый формат конфигурации")
@@ -121,6 +181,8 @@ def validate_config(config):
             uuid.UUID(block["id"])
             if not isinstance(block.get("title"), str) or not block["title"].strip():
                 raise ValueError("Введите название блока")
+            if block.get("accent") and not re.fullmatch(r"#[0-9a-fA-F]{6}", block["accent"]):
+                raise ValueError("Некорректный цвет блока")
             if block["id"] in identities or block["type"] not in BLOCK_TYPES:
                 raise ValueError("Повторный ID или неизвестный тип блока")
             identities.add(block["id"])

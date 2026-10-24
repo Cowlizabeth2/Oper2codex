@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import "."
-
 TextArea {
     id: control
     color: Theme.text
@@ -9,12 +8,8 @@ TextArea {
     placeholderTextColor: Theme.muted
     selectionColor: Theme.accent
     selectedTextColor: Theme.background
-    padding: 10
+    padding: Theme.s8
     wrapMode: TextEdit.Wrap
     selectByMouse: true
-    background: Rectangle {
-        color: Theme.background
-        radius: Theme.radius
-        border.color: control.activeFocus ? Theme.accent : Theme.border
-    }
+    background: Rectangle { color: Theme.background; radius: Theme.radius; border.color: control.activeFocus ? Theme.accent : Theme.border }
 }

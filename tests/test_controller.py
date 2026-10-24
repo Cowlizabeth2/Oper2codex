@@ -50,7 +50,7 @@ def test_template_selection_unicode_phrase_and_clipboard(app, store, configured,
     assert c.state["event"]["state"][block["id"]]["values"][a["id"]] == "Стартранс"
     inserted = c.insertField("🚒 До после", 3, 5, "[]", "Выделение")
     assert inserted["fields"][0]["default"] == "До"
-    assert inserted["source"].startswith("🚒 [[")
+    assert inserted["source"].startswith("🚒 ⟦1 · Выделение⟧")
 
 
 def test_reference_multiselect_persists_file_objects(app, store, tmp_path):

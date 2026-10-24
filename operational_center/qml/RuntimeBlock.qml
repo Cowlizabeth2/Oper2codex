@@ -2,224 +2,125 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import "."
-
 Rectangle {
     id: card
     required property var shell
     required property var block
-    radius: Theme.radius
-    color: Theme.panel
-    border.color: Theme.border
+    objectName: "runtimeBlock-"+block.id
+    radius: Theme.radius; color: Theme.panel; border.color: Theme.border
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 15
-        spacing: 10
-        Label { text: card.block.title; color: Theme.text; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+        anchors.fill: parent; anchors.margins: Theme.s12; spacing: Theme.s8
+        RowLayout { Layout.fillWidth: true
+            Icon { name: card.block.type; tint: card.block.accent || Theme.accent }
+            Label { text: card.block.title; color: Theme.text; font.bold: true; font.pixelSize: Theme.fontSize; Layout.fillWidth: true; elide: Text.ElideRight }
+        }
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
-        Loader {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            sourceComponent: card.block.type === "text" ? textBlock : card.block.type === "contacts" ? contactsBlock : card.block.type === "documents" ? documentsBlock : referenceBlock
-        }
+        Loader { Layout.fillWidth: true; Layout.fillHeight: true; sourceComponent: card.block.type==="text" ? textBlock : card.block.type==="contacts" ? contactsBlock : card.block.type==="documents" ? documentsBlock : referenceBlock }
     }
-    Component {
-        id: textBlock
-        ColumnLayout {
-            id: textContent
-            spacing: 8
-            property string output: card.block.preview
-            property string errors: card.block.validation
-            Connections {
-                target: backend
-                function onContentChanged(eventId, blockId, text, validation) {
-                    if (card.shell.state.event && eventId === card.shell.state.event.id && blockId === card.block.id) {
-                        textContent.output = text
-                        textContent.errors = validation
-                    }
-                }
-            }
-            ScrollView {
-                id: textScroll
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                contentWidth: availableWidth
-                clip: true
-                ColumnLayout {
-                    width: textScroll.availableWidth
-                    spacing: 10
-                    Repeater {
-                        model: card.block.fields
-                        delegate: ColumnLayout {
-                            id: fieldRow
-                            required property var modelData
-                            Layout.fillWidth: true
-                            spacing: 4
-                            Label { text: (fieldRow.modelData.label || "Поле") + (fieldRow.modelData.required ? " *" : ""); color: Theme.muted; font.pixelSize: Theme.smallSize }
-                            Loader {
-                                Layout.fillWidth: true
-                                sourceComponent: fieldRow.modelData.multiline ? multilineInput : singleInput
-                            }
-                            Component {
-                                id: singleInput
-                                Input {
-                                    text: card.block.runtime.values[fieldRow.modelData.id] || ""
-                                    placeholderText: fieldRow.modelData.placeholder || ""
-                                    onTextEdited: backend.setValue(card.block.id, fieldRow.modelData.id, text)
-                                }
-                            }
-                            Component {
-                                id: multilineInput
-                                Area {
-                                    text: card.block.runtime.values[fieldRow.modelData.id] || ""
-                                    placeholderText: fieldRow.modelData.placeholder || ""
-                                    implicitHeight: 80
-                                    onTextChanged: if (activeFocus) backend.setValue(card.block.id, fieldRow.modelData.id, text)
-                                }
-                            }
-                            ComboBox {
-                                visible: fieldRow.modelData.phrases && fieldRow.modelData.phrases.length > 0
-                                Layout.fillWidth: true
-                                model: ["Готовые фразы…"].concat(fieldRow.modelData.phrases || [])
-                                onActivated: if (currentIndex > 0) card.shell.run("phrase", {id:card.block.id, field:fieldRow.modelData.id, phrase:currentText})
-                            }
-                        }
-                    }
-                    Label { text: "ИТОГОВОЕ СООБЩЕНИЕ"; color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.topMargin: 4 }
-                    Area { text: textContent.output; readOnly: true; Layout.fillWidth: true; implicitHeight: Math.max(95, contentHeight + 24) }
-                    Label { text: textContent.errors; visible: text.length > 0; color: Theme.warning; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                }
-            }
-            ActionButton { text: "Копировать весь текст"; primary: true; Layout.fillWidth: true; onClicked: card.shell.run("copy_text", {id:card.block.id}) }
-        }
-    }
+    Component { id: textBlock; InlineMessage { shell: card.shell; block: card.block } }
     Component {
         id: contactsBlock
         ColumnLayout {
-            spacing: 8
-            Input { id: contactSearch; Layout.fillWidth: true; placeholderText: "Найти по ФИО, телефону, должности" }
-            Label { text: card.block.warning || ""; visible: text.length > 0; color: Theme.warning; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            spacing: Theme.s8
+            RowLayout { Layout.fillWidth: true
+                Input { id: contactSearch; Layout.fillWidth: true; placeholderText: "ФИО, телефон, должность" }
+                ActionButton { iconName: "redo"; quiet: true; tip: "Обновить из Excel"; onClicked: card.shell.run("refresh_contacts",{id:card.block.id}) }
+            }
+            Label { text: card.block.warning || ""; visible: text.length>0; color: Theme.warning; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; wrapMode: Text.Wrap }
             ListView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                spacing: 10
-                model: card.block.contacts.filter(function(c) { return (c.name + " " + c.phone + " " + c.role).toLowerCase().indexOf(contactSearch.text.toLowerCase()) !== -1 })
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true
+                model: card.block.contacts.filter(function(c) { return (c.name+" "+c.phone+" "+c.role).toLowerCase().indexOf(contactSearch.text.toLowerCase())>=0 })
                 ScrollBar.vertical: ScrollBar {}
                 delegate: Rectangle {
+                    id: contact
                     required property var modelData
-                    width: ListView.view.width - 12
-                    height: contactColumn.implicitHeight + 20
-                    radius: Theme.radius
-                    color: Theme.card
-                    ColumnLayout {
-                        id: contactColumn
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.margins: 10
-                        spacing: 5
-                        Label { text: modelData.name; color: Theme.text; font.bold: true; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                        Label { text: modelData.role; visible: text.length > 0; color: Theme.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                        RowLayout {
-                            Label { text: modelData.phone; color: Theme.accent; Layout.fillWidth: true }
-                            ActionButton { text: "Копировать"; onClicked: card.shell.run("copy_phone", {phone:modelData.phone}) }
+                    width: ListView.view.width; height: Math.max(Theme.row,info.implicitHeight+Theme.s12)
+                    color: hover.hovered ? Theme.card : "transparent"
+                    HoverHandler { id: hover }
+                    ColumnLayout { id: info; anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.topMargin: Theme.s4; spacing: Theme.s4
+                        RowLayout { Layout.fillWidth: true; spacing: Theme.s8
+                            Label { text: contact.modelData.name; color: Theme.text; font.bold: true; font.pixelSize: Theme.fontSize; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Label { text: contact.modelData.phone; color: Theme.accent; font.pixelSize: Theme.fontSize }
+                            ActionButton { iconName: "copy"; quiet: true; tip: "Копировать номер"; onClicked: card.shell.run("copy_phone",{phone:contact.modelData.phone}) }
                         }
-                        Label { text: modelData.actions.join(" · "); visible: text.length > 0; color: Theme.success; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                        Label { text: modelData.comment; visible: text.length > 0; color: Theme.text; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                        Label { text: [modelData.priority, modelData.deadline].filter(function(t) { return t }).join(" · "); visible: text.length > 0; color: Theme.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                        Label { visible: text.length>0; text: [contact.modelData.role,contact.modelData.actions.join(" · ")].filter(function(s) { return s }).join("  /  "); color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                        Label { visible: text.length>0; text: [contact.modelData.comment,contact.modelData.priority,contact.modelData.deadline].filter(function(s) { return s }).join(" · "); color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; wrapMode: Text.Wrap }
                     }
+                    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
                 }
-                Label { anchors.centerIn: parent; visible: parent.count === 0; text: "Контакты по тегу не найдены"; color: Theme.muted }
+                Label { anchors.centerIn: parent; visible: parent.count===0; text: "Контакты не найдены"; color: Theme.muted; font.pixelSize: Theme.fontSize }
             }
-            ActionButton { text: "Обновить из Excel"; Layout.fillWidth: true; onClicked: card.shell.run("refresh_contacts", {id:card.block.id}) }
         }
     }
     Component {
         id: documentsBlock
         ColumnLayout {
-            spacing: 8
+            spacing: Theme.s8
             ListView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                spacing: 8
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                 model: card.block.files
                 ScrollBar.vertical: ScrollBar {}
                 delegate: ColumnLayout {
+                    id: doc
                     required property var modelData
-                    width: ListView.view.width - 12
-                    spacing: 5
-                    Label { text: modelData.name; color: Theme.text; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                    Label { text: modelData.status === "ready" ? "Рабочая копия сохранена" : modelData.error || "Копирование прервано"; color: modelData.status === "ready" ? Theme.success : Theme.warning; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                    ActionButton { text: "Открыть рабочую копию"; enabled: modelData.status === "ready"; onClicked: card.shell.run("open_document", {id:card.block.id, path:modelData.path}) }
-                    ActionButton {
-                        text: "Восстановить из оригинала…"
-                        visible: modelData.status !== "ready" && !!modelData.source
-                        onClicked: card.shell.confirm("Восстановить эту копию из оригинала? Отсутствующий изменённый документ восстановится только из вашей отдельной резервной копии. Существующий файл не будет перезаписан.", function() { card.shell.run("repair_document", {id:card.block.id, path:modelData.path}) })
+                    width: ListView.view.width; spacing: Theme.s4
+                    RowLayout { Layout.fillWidth: true; spacing: Theme.s8
+                        Icon { name: "documents"; tint: doc.modelData.status==="ready" ? Theme.muted : Theme.warning }
+                        ColumnLayout { Layout.fillWidth: true; spacing: Theme.s4
+                            Label { text: doc.modelData.name; color: Theme.text; font.pixelSize: Theme.fontSize; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                            Label { text: doc.modelData.status==="ready" ? "Рабочая копия" : doc.modelData.error || "Копирование прервано"; color: doc.modelData.status==="ready" ? Theme.muted : Theme.warning; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                        }
+                        ActionButton { iconName: "arrow"; quiet: true; tip: "Открыть рабочую копию"; enabled: doc.modelData.status==="ready"; onClicked: card.shell.run("open_document",{id:card.block.id,path:doc.modelData.path}) }
                     }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: 4 }
+                    ActionButton { text: "Восстановить из оригинала…"; quiet: true; visible: doc.modelData.status!=="ready" && !!doc.modelData.source; onClicked: card.shell.confirm("Создать отсутствующую копию из оригинала? Прежние правки не восстановятся; существующие файлы не перезаписываются.",function() { card.shell.run("repair_document",{id:card.block.id,path:doc.modelData.path}) }) }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: Theme.s4; Layout.bottomMargin: Theme.s4 }
                 }
-                Label { anchors.centerIn: parent; visible: parent.count === 0; text: "Нет настроенных файлов"; color: Theme.muted }
+                Label { anchors.centerIn: parent; visible: parent.count===0; text: "Нет настроенных документов"; color: Theme.muted; font.pixelSize: Theme.fontSize }
             }
-            ActionButton { text: "Открыть папку рабочих файлов"; enabled: !!card.block.runtime.folder; Layout.fillWidth: true; onClicked: card.shell.run("open_folder", {path:card.block.runtime.folder}) }
+            ActionButton { text: "Рабочая папка"; iconName: "reference"; Layout.fillWidth: true; enabled: !!card.block.runtime.folder; onClicked: card.shell.run("open_folder",{path:card.block.runtime.folder}) }
         }
     }
     Component {
         id: referenceBlock
         ColumnLayout {
             id: references
-            spacing: 8
+            spacing: Theme.s8
             property var selection: card.block.runtime.selected || []
             property int anchorIndex: -1
-            property var filtered: card.block.files.filter(function(f) { return f.name.toLowerCase().indexOf(fileSearch.text.toLowerCase()) !== -1 })
-            Input { id: fileSearch; Layout.fillWidth: true; placeholderText: "Найти файл" }
-            Label { text: card.block.warning || ""; visible: text.length > 0; color: Theme.warning; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            property var filtered: card.block.files.filter(function(f) { return f.name.toLowerCase().indexOf(search.text.toLowerCase())>=0 })
+            function choose(index,mods) {
+                var selected=selection.slice(),path=filtered[index].source
+                if((mods&Qt.ShiftModifier) && anchorIndex>=0) { selected=[];for(var n=Math.min(anchorIndex,index);n<=Math.max(anchorIndex,index);++n) selected.push(filtered[n].source) }
+                else if(mods&Qt.ControlModifier) { var at=selected.indexOf(path);if(at>=0) selected.splice(at,1);else selected.push(path);anchorIndex=index }
+                else { selected=[path];anchorIndex=index }
+                selection=selected;backend.selectFiles(card.block.id,JSON.stringify(selected))
+            }
+            Input { id: search; Layout.fillWidth: true; placeholderText: "Найти файл"; onTextEdited: references.anchorIndex=-1 }
+            Label { text: card.block.warning || ""; visible: text.length>0; color: Theme.warning; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; wrapMode: Text.Wrap }
             ListView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                spacing: 5
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                 model: references.filtered
                 ScrollBar.vertical: ScrollBar {}
                 delegate: Rectangle {
-                    id: referenceRow
+                    id: row
                     required property var modelData
                     required property int index
-                    width: ListView.view.width - 12
-                    height: 55
-                    radius: Theme.radius
-                    color: references.selection.indexOf(modelData.source) >= 0 ? Theme.card : Theme.panel
-                    border.color: references.selection.indexOf(modelData.source) >= 0 ? Theme.accent : Theme.border
-                    Label { anchors.fill: parent; anchors.margins: 10; text: referenceRow.modelData.name; verticalAlignment: Text.AlignVCenter; elide: Text.ElideMiddle; color: Theme.text }
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: function(mouse) {
-                            var selected = references.selection.slice()
-                            if ((mouse.modifiers & Qt.ShiftModifier) && references.anchorIndex >= 0) {
-                                selected = []
-                                for (var n = Math.min(references.anchorIndex, referenceRow.index); n <= Math.max(references.anchorIndex, referenceRow.index); ++n) selected.push(references.filtered[n].source)
-                            } else if (mouse.modifiers & Qt.ControlModifier) {
-                                var at = selected.indexOf(referenceRow.modelData.source)
-                                if (at >= 0) selected.splice(at, 1); else selected.push(referenceRow.modelData.source)
-                                references.anchorIndex = referenceRow.index
-                            } else {
-                                selected = [referenceRow.modelData.source]
-                                references.anchorIndex = referenceRow.index
-                            }
-                            references.selection = selected
-                            backend.selectFiles(card.block.id, JSON.stringify(selected))
-                        }
-                        onDoubleClicked: card.shell.run("preview", {id:card.block.id, path:referenceRow.modelData.source})
+                    width: ListView.view.width; height: Theme.row
+                    radius: Theme.s4; color: references.selection.indexOf(modelData.source)>=0 ? Theme.card : "transparent"
+                    MouseArea { anchors.fill: parent; onClicked: function(mouse) { references.choose(row.index,mouse.modifiers) } onDoubleClicked: card.shell.run("preview",{id:card.block.id,path:row.modelData.source}) }
+                    RowLayout { anchors.fill: parent; spacing: Theme.s8
+                        Icon { name: row.modelData.name.toLowerCase().endsWith(".xlsx") ? "contacts" : row.modelData.name.toLowerCase().endsWith(".docx") ? "documents" : row.modelData.name.toLowerCase().endsWith(".txt") ? "text" : "file" }
+                        Label { text: row.modelData.name; color: Theme.text; font.pixelSize: Theme.fontSize; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                        ActionButton { iconName: "arrow"; quiet: true; tip: "Открыть безопасную копию"; onClicked: card.shell.run("preview",{id:card.block.id,path:row.modelData.source}) }
+                        ActionButton { iconName: "reference"; quiet: true; tip: "Расположение файла"; onClicked: card.shell.run("open_parent",{path:row.modelData.source}) }
                     }
+                    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
                 }
             }
-            Label { text: "Выбрано: " + references.selection.length + " · Ctrl / Shift"; color: Theme.muted; font.pixelSize: Theme.smallSize }
-            RowLayout {
-                Layout.fillWidth: true
-                ActionButton { text: "Просмотреть"; Layout.fillWidth: true; enabled: references.selection.length > 0; onClicked: card.shell.run("preview", {id:card.block.id, path:references.selection[0]}) }
-                ActionButton { text: "Папка"; enabled: references.selection.length > 0; onClicked: card.shell.run("open_parent", {path:references.selection[0]}) }
+            RowLayout { Layout.fillWidth: true
+                Label { text: references.selection.length+" выбрано · Ctrl / Shift"; color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.fillWidth: true }
+                ActionButton { text: "Копировать файлы"; iconName: "copy"; primary: true; enabled: references.selection.length>0; onClicked: card.shell.run("copy_files",{id:card.block.id}) }
             }
-            ActionButton { text: "Копировать файлы"; primary: true; Layout.fillWidth: true; enabled: references.selection.length > 0; onClicked: card.shell.run("copy_files", {id:card.block.id}) }
         }
     }
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Property, Signal, Slot, QUrl, QMimeData
@@ -12,9 +13,10 @@ from PySide6.QtGui import QDesktopServices, QGuiApplication
 from . import __version__
 from .contacts import ContactsService, create_directory
 from .domain import (new_master, new_block, uid, duplicate_master, validate_config,
-                     field, parse_template, template_source, render, validate_values, apply_phrase)
+                     field, parse_template, template_source, render, validate_values, apply_phrase, inline_tokens,
+                     editor_template, editor_token, parse_editor_template)
 from .files import DocumentService, ReferenceService, scan, atomic_copy
-from .theme import theme
+from .theme import theme, ThemeManager
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +25,7 @@ class Controller(QObject):
     stateChanged = Signal()
     notice = Signal(str)
     contentChanged = Signal(str, str, str, str)
+    valueChanged = Signal(str, str, str, str)
 
     def __init__(self, store, data_dir, commit="development"):
         super().__init__()
@@ -32,6 +35,8 @@ class Controller(QObject):
         self.references = ReferenceService(data_dir)
         self.contacts = ContactsService(store)
         self.commit = commit
+        self.themes = ThemeManager(store, self)
+        self.block_clipboard = []
         self.active = next((e["id"] for e in store.events() if e["visible"] and not e["archived"]), "")
         self.selected_master = store.config("draft")[1]["masters"][0]["id"] if store.config("draft")[1]["masters"] else ""
         self.selected_block = ""
@@ -53,6 +58,7 @@ class Controller(QObject):
                 if block["type"] == "text":
                     segments = block["config"]["segments"]
                     block["fields"] = [s for s in segments if s["kind"] == "field"]
+                    block["tokens"] = inline_tokens(segments)
                     block["preview"] = render(segments, local["values"])
                     block["validation"] = "\n".join(validate_values(segments, local["values"]))
                 elif block["type"] == "documents":
@@ -64,16 +70,18 @@ class Controller(QObject):
                     block["contacts"], block["warning"] = self.contacts.load(block["config"].get("path"), event["tag"], block["config"].get("tag_map"))
         name, tokens = theme(self.store)
         result = {"version": __version__, "commit": self.commit, "theme": name, "tokens": tokens,
-                  "scale": self.store.pref("scale", 1.0), "published": published, "configVersion": version,
+                  "scale": self.store.pref("scale", 1.0), "uiScale": self.themes.uiScale,
+                  "sidebarCollapsed": self.store.pref("sidebar_collapsed", False),
+                  "published": published, "configVersion": version,
                   "draft": draft, "master": current_master, "selectedBlock": selected, "event": event,
                   "events": self.store.events(), "canUndo": bool(self.undo_stack), "canRedo": bool(self.redo_stack),
                   "logs": self.store.logs(), "dataDir": str(self.data_dir)}
         if selected and selected["type"] == "text":
-            result["templateSource"] = template_source(selected["config"]["segments"])
-            result["templateFields"] = [s for s in selected["config"]["segments"] if s["kind"] == "field"]
+            result["templateSource"], result["templateFields"] = editor_template(selected["config"]["segments"])
         return result
 
     state = Property("QVariantMap", get_state, notify=stateChanged)
+    themeManager = Property(QObject, lambda self: self.themes, constant=True)
 
     def change_draft(self, mutation):
         _, before = self.store.config("draft")
@@ -95,7 +103,13 @@ class Controller(QObject):
         try:
             args = json.loads(payload)
             self._command(action, args)
-            self.stateChanged.emit()
+            if action in {"create_event", "select_event", "hide_event", "archive_event", "copy_text", "copy_phone", "copy_files", "open_document", "repair_document", "preview"}:
+                identity = args.get("id") if action in {"select_event", "hide_event", "archive_event"} else self.active
+                messages = {"create_event":"Создана карточка происшествия", "select_event":"Открыта карточка", "hide_event":"Вкладка скрыта", "archive_event":"Происшествие архивировано", "copy_text":"Сообщение скопировано", "copy_phone":"Номер скопирован", "copy_files":"Файлы помещены в буфер", "open_document":"Открыта рабочая копия", "repair_document":"Рабочая копия восстановлена из оригинала", "preview":"Открыта безопасная копия справочного файла"}
+                if identity:
+                    self.store.record_action(identity, messages[action])
+            if action not in {"phrase", "copy_text", "copy_phone", "copy_files", "open_folder", "open_parent", "open_document", "preview", "backup", "export", "copy_blocks"}:
+                self.stateChanged.emit()
             return True
         except Exception as exc:
             log.exception("Операция %s не выполнена", action)
@@ -142,7 +156,7 @@ class Controller(QObject):
             block = new_block(a["type"])
             def add(c):
                 master = self.master(c)
-                block.update(x=260 + (len(master["blocks"]) % 3) * 500, y=60 + (len(master["blocks"]) // 3) * 400)
+                block.update(x=232 + (len(master["blocks"]) % 2) * 432, y=40 + (len(master["blocks"]) // 2) * 312)
                 master["blocks"].append(block)
                 master["links"].append(block["id"])
             self.change_draft(add)
@@ -168,6 +182,35 @@ class Controller(QObject):
                 self.block(c, a["id"]).update(x=max(0, a["x"]), y=max(0, a["y"]), width=max(320, a["width"]), height=max(260, a["height"]))
             self.change_draft(geometry)
             self.selected_block = a["id"]
+        elif action == "geometry_batch":
+            def batch(c):
+                for item in a["items"]:
+                    self.block(c, item["id"]).update({key: item[key] for key in ("x", "y", "width", "height")})
+            self.change_draft(batch)
+            if a["items"]:
+                self.selected_block = a["items"][0]["id"]
+        elif action == "copy_blocks":
+            _, config = self.store.config("draft")
+            self.block_clipboard = copy.deepcopy([b for b in self.master(config)["blocks"] if b["id"] in a["ids"]])
+        elif action in {"paste_blocks", "duplicate_blocks"}:
+            _, config = self.store.config("draft")
+            originals = self.block_clipboard if action == "paste_blocks" else [b for b in self.master(config)["blocks"] if b["id"] in a["ids"]]
+            blocks = copy.deepcopy(originals)
+            for block in blocks:
+                block.update(id=uid(), x=block["x"] + 32, y=block["y"] + 32, title=block["title"] + " — копия")
+            if blocks:
+                def paste(c):
+                    self.master(c)["blocks"].extend(blocks)
+                    self.master(c)["links"].extend(b["id"] for b in blocks)
+                self.change_draft(paste)
+                self.selected_block = blocks[0]["id"]
+        elif action == "delete_blocks":
+            def delete(c):
+                master = self.master(c)
+                master["blocks"] = [b for b in master["blocks"] if b["id"] not in a["ids"]]
+                master["links"] = [i for i in master["links"] if i not in a["ids"]]
+            self.change_draft(delete)
+            self.selected_block = ""
         elif action == "toggle_link":
             def toggle(c):
                 master = self.master(c)
@@ -180,7 +223,14 @@ class Controller(QObject):
         elif action == "save_block":
             def save(c):
                 self.block(c, a["id"]).update(title=a["title"], config=a["config"])
+                if "accent" in a:
+                    self.block(c, a["id"])["accent"] = a["accent"]
             self.change_draft(save)
+        elif action == "block_accent":
+            color = a["color"].strip()
+            if color and not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+                raise ValueError("Цвет должен иметь формат #RRGGBB")
+            self.change_draft(lambda c: self.block(c, a["id"]).update(accent=color))
         elif action in {"undo", "redo"}:
             origin, destination = (self.undo_stack, self.redo_stack) if action == "undo" else (self.redo_stack, self.undo_stack)
             if origin:
@@ -199,8 +249,16 @@ class Controller(QObject):
             if a["name"] not in {"dark", "light"}:
                 raise ValueError("Неизвестная тема")
             self.store.set_pref("theme", a["name"])
+            self.themes.reload()
+        elif action == "ui_scale":
+            if a["value"] not in [.85, 1.0, 1.1, 1.25, 1.5]:
+                raise ValueError("Некорректный масштаб интерфейса")
+            self.store.set_pref("ui_scale", a["value"])
+            self.themes.reload()
+        elif action == "sidebar":
+            self.store.set_pref("sidebar_collapsed", bool(a["collapsed"]))
         elif action == "scale":
-            if a["value"] not in [1.0, 1.1, 1.25, 1.5]:
+            if not isinstance(a["value"], (int, float)) or not .1 <= a["value"] <= 3:
                 raise ValueError("Некорректный масштаб")
             self.store.set_pref("scale", a["value"])
         elif action == "copy_text":
@@ -273,6 +331,7 @@ class Controller(QObject):
             self.selected_master = next((m["id"] for m in self.store.config("draft")[1]["masters"]), "")
             self.selected_block = ""
             self.undo_stack.clear(); self.redo_stack.clear()
+            self.themes.reload()
             self.notice.emit("База восстановлена. Предыдущая база сохранена: " + before)
         elif action == "export":
             _, config = self.store.config("draft")
@@ -307,6 +366,9 @@ class Controller(QObject):
             raise ValueError("Поле не найдено")
         state["values"][field_id] = value
         self.store.save_state(event["id"], event["state"])
+        definition = next(s for s in block["config"]["segments"] if s.get("id") == field_id)
+        self.store.record_action(event["id"], "Изменено поле «" + definition.get("label", "Поле") + "»", "field:" + block_id + ":" + field_id)
+        self.valueChanged.emit(event["id"], block_id, field_id, value)
         segments = block["config"]["segments"]
         self.contentChanged.emit(event["id"], block_id, render(segments, state["values"]), "\n".join(validate_values(segments, state["values"])))
 
@@ -340,23 +402,31 @@ class Controller(QObject):
             # QML cursor positions are UTF-16 code units, Python indexes codepoints.
             raw = source.encode("utf-16-le")
             before, selected, after = (raw[:start * 2].decode("utf-16-le"), raw[start * 2:end * 2].decode("utf-16-le"), raw[end * 2:].decode("utf-16-le"))
-            parse_template(source, fields)
-            if "[[" in selected or "]]" in selected:
+            parse_editor_template(source, fields)
+            markers = [f.get("_editor_token", "[["+f["id"]+"]]") for f in fields]
+            selection_start, selection_end = len(before), len(before)+len(selected)
+            overlaps = any((source.find(marker) < selection_end and source.find(marker)+len(marker) > selection_start) or (selection_start == selection_end and source.find(marker) < selection_start < source.find(marker)+len(marker)) for marker in markers if marker in source)
+            if overlaps:
                 raise ValueError("Выделение не должно пересекать существующие поля")
             new = field(label or "Поле", default=selected)
-            source = before + "[[" + new["id"] + "]]" + after
+            new["_editor_token"] = editor_token(new, len(fields)+1, source)
+            source = before + new["_editor_token"] + after
             fields.append(new)
-            parse_template(source, fields)
+            parse_editor_template(source, fields)
             return {"source": source, "fields": fields}
         except Exception as exc:
             self.notice.emit("Поле не добавлено: " + str(exc))
             return {}
 
     @Slot(str, str, str, str, result=bool)
-    def saveTemplate(self, identity, title, source, fields_json):
+    @Slot(str, str, str, str, str, result=bool)
+    def saveTemplate(self, identity, title, source, fields_json, accent=None):
         try:
-            segments = parse_template(source, json.loads(fields_json))
-            return self.command("save_block", json.dumps({"id": identity, "title": title, "config": {"segments": segments}}))
+            segments = parse_editor_template(source, json.loads(fields_json))
+            payload = {"id": identity, "title": title, "config": {"segments": segments}}
+            if accent is not None:
+                payload["accent"] = accent
+            return self.command("save_block", json.dumps(payload))
         except Exception as exc:
             self.notice.emit("Шаблон не сохранён: " + str(exc))
             return False
@@ -364,3 +434,7 @@ class Controller(QObject):
     @Slot(str, result=str)
     def localPath(self, url):
         return QUrl(url).toLocalFile()
+
+    @Slot(str, result="QVariantList")
+    def eventHistory(self, identity):
+        return list(reversed(self.store.event(identity)["state"].get("_history", [])))

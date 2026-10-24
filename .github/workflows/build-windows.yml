@@ -58,6 +58,20 @@ jobs:
           Set-Location $env:OPER_BUILD_ROOT
           python tools/run_smoke.py
           exit $LASTEXITCODE
+      - name: Review both themes at desktop resolutions
+        shell: pwsh
+        run: |
+          Set-Location $env:OPER_BUILD_ROOT
+          python tools/visual_review.py --output artifacts/visual --sizes 1920x1080,1366x768
+          exit $LASTEXITCODE
+      - name: Review effective Qt scaling at 125 percent
+        shell: pwsh
+        env:
+          QT_SCALE_FACTOR: '1.25'
+        run: |
+          Set-Location $env:OPER_BUILD_ROOT
+          python tools/visual_review.py --output artifacts/visual-125 --sizes 1366x768
+          exit $LASTEXITCODE
       - name: Build and smoke-test packaged application
         shell: pwsh
         run: |
@@ -80,6 +94,15 @@ jobs:
           name: OperationalCenter-Windows
           path: ${{ env.OPER_BUILD_ROOT }}/artifacts/OperationalCenter-Windows.zip
           if-no-files-found: error
+      - name: Upload screenshots and visual reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UI-review
+          path: |
+            ${{ env.OPER_BUILD_ROOT }}/artifacts/visual/
+            ${{ env.OPER_BUILD_ROOT }}/artifacts/visual-125/
+          if-no-files-found: ignore
       - name: Save machine-readable build report
         if: always()
         uses: actions/github-script@v7
@@ -90,7 +113,7 @@ jobs:
             const root = process.env.OPER_BUILD_ROOT;
             if (!root) return;
             const report = {commit: context.sha, run_id: context.runId, files: {}};
-            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'source-output.txt', 'source-exit-code.txt', 'packaged-smoke.json', 'build-output.txt', 'packaged-output.txt']) {
+            for (const name of ['tests.xml', 'test-output.txt', 'test-exit-code.txt', 'source-smoke.json', 'source-output.txt', 'source-exit-code.txt', 'packaged-smoke.json', 'build-output.txt', 'packaged-output.txt', 'visual/report.json', 'visual-125/report.json']) {
               const source = path.join(root, 'artifacts', name);
               if (fs.existsSync(source)) report.files[name] = fs.readFileSync(source, 'utf8').slice(0, 250000);
             }
@@ -110,3 +133,21 @@ jobs:
             await github.rest.repos.createOrUpdateFileContents({owner, repo, path: file, branch, sha,
               message: 'Record Windows build diagnostics for ' + context.sha.slice(0, 8),
               content: Buffer.from(JSON.stringify(report, null, 2)).toString('base64')});
+            const captures = [];
+            for (const theme of ['dark', 'light']) for (const page of ['events', 'builder']) {
+              const name = `1366x768-${theme}-${page}.png`;
+              const source = path.join(root, 'artifacts', 'visual', name);
+              if (fs.existsSync(source)) captures.push({name, source});
+            }
+            if (captures.length) {
+              const ref = await github.rest.git.getRef({owner, repo, ref: 'heads/' + branch});
+              const parent = await github.rest.git.getCommit({owner, repo, commit_sha: ref.data.object.sha});
+              const tree = [];
+              for (const capture of captures) {
+                const blob = await github.rest.git.createBlob({owner, repo, encoding: 'base64', content: fs.readFileSync(capture.source).toString('base64')});
+                tree.push({path: 'ci-diagnostics/screenshots/' + capture.name, mode: '100644', type: 'blob', sha: blob.data.sha});
+              }
+              const created = await github.rest.git.createTree({owner, repo, base_tree: parent.data.tree.sha, tree});
+              const commit = await github.rest.git.createCommit({owner, repo, message: 'Record rendered Windows UI for ' + context.sha.slice(0,8), tree: created.data.sha, parents: [ref.data.object.sha]});
+              await github.rest.git.updateRef({owner, repo, ref: 'heads/' + branch, sha: commit.data.sha});
+            }
