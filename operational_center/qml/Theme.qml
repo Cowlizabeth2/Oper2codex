@@ -38,6 +38,7 @@ QtObject {
     readonly property int toolbar: px(44)
     readonly property int header: px(52)
     readonly property int fieldWidth: px(144)
+    readonly property int fieldCompact: px(96)
     readonly property int fieldWide: px(300)
     readonly property int fieldMaxHeight: px(128)
     readonly property int grid: 20

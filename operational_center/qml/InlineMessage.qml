@@ -8,7 +8,24 @@ ColumnLayout {
     required property var shell
     required property var block
     property string validation: block.validation || ""
+    // Presentation only: preserve the original segments, UUIDs and copy output.
+    property var lines: documentLines(block.tokens || [])
     spacing: Theme.s8
+    function documentLines(tokens) {
+        var rows=[],current=[]
+        function append() {
+            var fields=current.filter(function(t) {return t.token==="field"}),prefix="",seen=false,suffix=""
+            for(var i=0;i<current.length;++i) {
+                if(current[i].token==="field") seen=true
+                else if(!seen) prefix+=current[i].text
+                else suffix+=current[i].text
+            }
+            rows.push({tokens:current,simple:fields.length===1 && suffix.trim().length===0,prefix:prefix,field:fields.length===1 ? fields[0] : null})
+            current=[]
+        }
+        for(var i=0;i<tokens.length;++i) { if(tokens[i].token==="break") append();else current.push(tokens[i]) }
+        append();return rows
+    }
     Connections {
         target: backend
         function onContentChanged(eventId, blockId, text, errors) {
@@ -23,116 +40,82 @@ ColumnLayout {
         contentWidth: availableWidth
         clip: true
         Column {
+            id: document
             width: scroll.availableWidth
             spacing: Theme.s8
-            Flow {
-                id: flow
-                objectName: "inlineMessageFlow"
-                width: parent.width
-                spacing: 0
-                Repeater {
-                    model: message.block.tokens || []
-                    delegate: Loader {
-                        id: entry
-                        required property var modelData
-                        sourceComponent: modelData.token === "static" ? literal : modelData.token === "break" ? lineBreak : fieldInput
-                        Component {
-                            id: literal
+            property real labelWidth: { var effectiveFont=metrics.font;return Math.min(width*0.42,Math.max.apply(null,message.lines.map(function(line) {return line.simple ? metrics.advanceWidth(line.prefix) : 0}))) }
+            FontMetrics { id: metrics; font: Qt.font({family:message.shell.font.family,pixelSize:Theme.fontSize}) }
+            Repeater {
+                model: message.lines
+                delegate: Loader {
+                    id: line
+                    required property var modelData
+                    width: document.width
+                    sourceComponent: modelData.simple ? labeledLine : mixedLine
+                    Component {
+                        id: labeledLine
+                        RowLayout {
+                            width: line.width
+                            spacing: line.modelData.prefix.length ? Theme.s8 : 0
                             Text {
                                 objectName: "protectedLiteral"
-                                text: entry.modelData.text
+                                text: line.modelData.prefix
                                 textFormat: Text.PlainText
-                                font.pixelSize: Theme.fontSize
-                                color: Theme.text
-                                width: Math.min(implicitWidth, flow.width)
-                                height: Math.max(Theme.control, implicitHeight)
-                                wrapMode: Text.WrapAnywhere
+                                visible: line.modelData.prefix.length>0
+                                Layout.preferredWidth: document.labelWidth
+                                Layout.minimumWidth: 0
+                                Layout.alignment: Qt.AlignTop
+                                Layout.preferredHeight: Math.max(Theme.control,implicitHeight)
                                 verticalAlignment: Text.AlignVCenter
+                                wrapMode: Text.Wrap
+                                color: Theme.text
+                                font.pixelSize: Theme.fontSize
                             }
+                            InlineField {
+                                shell: message.shell; block: message.block; definition: line.modelData.field
+                                Layout.preferredWidth: Math.min(implicitWidth,Math.max(0,line.width-(line.modelData.prefix.length ? document.labelWidth+Theme.s8 : 0)))
+                                Layout.minimumWidth: 0
+                                Layout.alignment: Qt.AlignTop
+                            }
+                            Item { Layout.fillWidth: true }
                         }
-                        Component {
-                            id: lineBreak
-                            Item { width: flow.width; height: entry.modelData.blank ? Theme.control : 1 }
-                        }
-                        Component {
-                            id: fieldInput
-                            Row {
-                                id: fieldRow
-                                property var definition: entry.modelData
-                                property string value: message.block.runtime.values[definition.id] !== undefined ? String(message.block.runtime.values[definition.id]) : (definition.default || "")
-                                property bool hasPhrases: (definition.phrases || []).length > 0
-                                spacing: Theme.s4
-                                width: Math.min(flow.width, definition.multiline ? Theme.fieldWide : Math.max(Theme.fieldWidth, Math.min(Theme.fieldWide, metrics.advanceWidth(value || definition.placeholder || definition.label || "") + Theme.s32 + (hasPhrases ? Theme.control : 0))))
-                                height: inputLoader.height
-                                FontMetrics { id: metrics; font.pixelSize: Theme.fontSize }
-                                Connections {
-                                    target: backend
-                                    function onValueChanged(eventId, blockId, fieldId, value) {
-                                        if (message.shell.state.event && eventId === message.shell.state.event.id && blockId === message.block.id && fieldId === fieldRow.definition.id) fieldRow.value = value
-                                    }
-                                }
-                                Loader {
-                                    id: inputLoader
-                                    width: fieldRow.width - (fieldRow.hasPhrases ? Theme.control + Theme.s4 : 0)
-                                    sourceComponent: fieldRow.definition.multiline ? multi : single
-                                }
-                                Component {
-                                    id: single
-                                    Input {
-                                        objectName: "inlineField-" + fieldRow.definition.id
-                                        text: fieldRow.value
-                                        placeholderText: fieldRow.definition.placeholder || fieldRow.definition.label || ""
-                                        onTextEdited: backend.setValue(message.block.id, fieldRow.definition.id, text)
-                                        ToolTip.visible: hovered
-                                        ToolTip.text: (fieldRow.definition.label || "") + (fieldRow.definition.required ? " · Обязательное" : "")
-                                    }
-                                }
-                                Component {
-                                    id: multi
-                                    ScrollView {
-                                        implicitHeight: Math.min(Theme.fieldMaxHeight, Math.max(Theme.control, multiArea.contentHeight + Theme.s16))
-                                        contentWidth: availableWidth
-                                        clip: true
-                                        Area {
-                                            id: multiArea
-                                            objectName: "inlineField-" + fieldRow.definition.id
-                                            text: fieldRow.value
-                                            placeholderText: fieldRow.definition.placeholder || fieldRow.definition.label || ""
-                                            onTextChanged: if (activeFocus && text !== fieldRow.value) backend.setValue(message.block.id, fieldRow.definition.id, text)
+                    }
+                    Component {
+                        id: mixedLine
+                        Flow {
+                            id: flow
+                            objectName: "inlineMessageFlow"
+                            width: line.width
+                            spacing: 0
+                            // Empty source paragraphs retain their own line.
+                            height: Math.max(Theme.control,implicitHeight-Theme.s8)
+                            Repeater {
+                                model: line.modelData.tokens
+                                delegate: Item {
+                                    id: entry
+                                    required property var modelData
+                                    width: tokenLoader.width
+                                    height: tokenLoader.height+Theme.s8
+                                    Loader { id: tokenLoader; sourceComponent: entry.modelData.token==="field" ? inlineValue : literal }
+                                    Component {
+                                        id: literal
+                                        Text {
+                                            objectName: "protectedLiteral"
+                                            text: entry.modelData.text
+                                            textFormat: Text.PlainText
+                                            color: Theme.text; font.pixelSize: Theme.fontSize
+                                            width: Math.min(implicitWidth,flow.width)
+                                            height: Math.max(Theme.control,implicitHeight)
+                                            verticalAlignment: Text.AlignVCenter
+                                            wrapMode: Text.Wrap
                                         }
                                     }
-                                }
-                                ActionButton {
-                                    objectName: "presetButton-" + fieldRow.definition.id
-                                    visible: fieldRow.hasPhrases
-                                    width: Theme.control
-                                    height: Theme.control
-                                    iconName: "chevron"
-                                    tip: "Готовые фразы"
-                                    onClicked: phrases.open()
-                                    Menu {
-                                        id: phrases
-                                        popupType: Popup.Item
-                                        width: Theme.fieldWidth + Theme.s32
-                                        padding: Theme.s4
-                                        y: parent.height + Theme.s4
-                                        background: Rectangle { color: Theme.panel; border.color: Theme.border; radius: Theme.radius }
-                                        Repeater {
-                                            model: fieldRow.definition.phrases || []
-                                            MenuItem {
-                                                id: phraseOption
-                                                required property string modelData
-                                                required property int index
-                                                objectName: "presetChoice-"+fieldRow.definition.id+"-"+index
-                                                width: phrases.width-Theme.s8
-                                                implicitHeight: Theme.control
-                                                text: modelData
-                                                font.pixelSize: Theme.fontSize
-                                                palette.text: Theme.text
-                                                contentItem: Text { text: phraseOption.text; color: Theme.text; font.pixelSize: Theme.fontSize; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
-                                                background: Rectangle { radius: Theme.s4; color: phraseOption.highlighted || phraseOption.hovered ? Theme.card : "transparent" }
-                                                onTriggered: message.shell.run("phrase", {id:message.block.id, field:fieldRow.definition.id, phrase:modelData})
-                                            }
+                                    Component {
+                                        id: inlineValue
+                                        InlineField {
+                                            shell: message.shell; block: message.block; definition: entry.modelData
+                                            width: Math.min(implicitWidth,flow.width)
+                                            height: implicitHeight
                                         }
                                     }
                                 }
@@ -141,8 +124,8 @@ ColumnLayout {
                     }
                 }
             }
-            Text { width: parent.width; visible: message.validation.length > 0; text: message.validation; color: Theme.warning; font.pixelSize: Theme.smallSize; wrapMode: Text.Wrap }
+            Text { width: parent.width; visible: message.validation.length>0; text: message.validation; color: Theme.warning; font.pixelSize: Theme.smallSize; wrapMode: Text.Wrap }
         }
     }
-    ActionButton { text: "Копировать весь текст"; iconName: "copy"; primary: true; Layout.fillWidth: true; onClicked: message.shell.run("copy_text", {id:message.block.id}) }
+    ActionButton { objectName: "copyInlineMessage"; text: "Копировать весь текст"; iconName: "copy"; primary: true; Layout.fillWidth: true; onClicked: message.shell.run("copy_text",{id:message.block.id}) }
 }

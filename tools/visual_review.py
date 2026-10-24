@@ -18,11 +18,20 @@ from operational_center.controller import Controller
 from tools.review_fixture import prepare
 
 
+def visual_child(item, name):
+    if item.objectName()==name: return item
+    for child in item.childItems():
+        found=visual_child(child,name)
+        if found is not None: return found
+    return None
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--output',type=Path,default=Path('artifacts/visual'))
     parser.add_argument('--sizes',default='1920x1080,1366x768')
     parser.add_argument('--catalogs',action='store_true')
+    parser.add_argument('--text-layout',action='store_true')
     args=parser.parse_args()
     args.output.mkdir(parents=True,exist_ok=True)
     if sys.platform=='win32' and os.environ.get('QT_QPA_PLATFORM')=='offscreen':
@@ -37,7 +46,10 @@ def main():
     report={'screens':[],'qml_errors':warnings,'scale_factor':os.environ.get('QT_SCALE_FACTOR','1'),'platform':app.platformName()}
     with tempfile.TemporaryDirectory(prefix='oper-visual-') as temp:
         store=Store(Path(temp)/'review.sqlite')
-        if args.catalogs:
+        if args.text_layout:
+            from tools.text_layout_fixture import prepare as text_prepare
+            master,text=text_prepare(store,temp)
+        elif args.catalogs:
             from tools.catalog_fixture import prepare as catalog_prepare
             master,text,import_path=catalog_prepare(store,temp)
         else:
@@ -59,7 +71,7 @@ def main():
             root.resize(width,height)
             for theme in ['dark','light']:
                 backend.command('theme',json.dumps({'name':theme}))
-                for page in (['home','events','builder','catalog','catalog-manager','scenario-import'] if args.catalogs else ['home','events','history','builder','settings','logs']):
+                for page in (['events'] if args.text_layout else ['home','events','builder','catalog','catalog-manager','scenario-import'] if args.catalogs else ['home','events','history','builder','settings','logs']):
                     for name in ['catalogSearchDialog','catalogManagerDialog','scenarioImportDialog']:
                         popup=root.findChild(QObject,name)
                         if popup.property('visible'): QMetaObject.invokeMethod(popup,'close',Qt.DirectConnection)
@@ -84,13 +96,20 @@ def main():
                     if image.isNull(): raise RuntimeError('Empty screenshot: '+page)
                     filename=f'{size}-{theme}-{page}.png'
                     if not image.save(str(args.output/filename)): raise RuntimeError('Cannot save screenshot')
+                    if args.text_layout:
+                        # Capture the actual rendered card as well as its window.
+                        card=visual_child(root.contentItem(),'runtimeBlock-'+text['id'])
+                        capture=card.grabToImage()
+                        QTest.qWait(100)
+                        if not capture.saveToFile(str(args.output/f'{size}-{theme}-text-template.png')):
+                            raise RuntimeError('Cannot capture TextTemplateBlock')
                     report['screens'].append({'file':filename,'page':page,'theme':theme,'requested':[width,height],'actual':[root.width(),root.height()],'pixels':[image.width(),image.height()],'dpr':root.devicePixelRatio()})
         root.close();del current;del root;del engine
         app.processEvents()
         store.close()
     qInstallMessageHandler(old)
     report['geometry_ok']=all(s['actual']==s['requested'] and all(abs(s['pixels'][i]-s['actual'][i]*s['dpr'])<=2 for i in (0,1)) for s in report['screens'])
-    report['ok']=not warnings and report['geometry_ok'] and len(report['screens'])==len(args.sizes.split(','))*12
+    report['ok']=not warnings and report['geometry_ok'] and len(report['screens'])==len(args.sizes.split(','))*(2 if args.text_layout else 12)
     (args.output/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps({'ok':report['ok'],'screens':len(report['screens']),'warnings':warnings},ensure_ascii=False))
     return 0 if report['ok'] else 1
