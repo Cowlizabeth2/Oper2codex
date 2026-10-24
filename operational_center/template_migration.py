@@ -128,6 +128,7 @@ def _prepare(store, block_id, field_id, prefix, source_property):
                     continue
                 updated=copy.deepcopy(field)
                 updated.setdefault('_repair_archive',[]).append({'source':source_property,'prefix':prefix,
+                    'stored_value_present':field_id in values,'stored_value':copy.deepcopy(values.get(field_id)),
                     'properties':{name:copy.deepcopy(field[name]) for name in ('default','value','text','placeholder','phrases') if name in field}})
                 if source_property=='placeholder':
                     updated['default']=default[len(prefix):] if isinstance(default,str) and default.startswith(prefix) else default

@@ -36,6 +36,7 @@ def test_old_editable_properties_are_repaired_only_after_review(tmp_path,name):
         assert after['state'][case['block_id']]['values'][case['field_id']]==case['expected']
         assert field['_repair_archive'][-1]['properties'][case['source_property']]==original[case['source_property']]
         assert field['_repair_archive'][-1]['properties']['phrases']==original['phrases']
+        assert field['_repair_archive'][-1]['stored_value']==before['state'][case['block_id']]['values'][case['field_id']]
         assert field['id']==original['id'] and after['snapshot']['links']==before['snapshot']['links']
         assert len([s for s in fixed['config']['segments'] if s.get('kind')=='text' and s.get('text')=='Время: '])==1
     finally:store.close()
