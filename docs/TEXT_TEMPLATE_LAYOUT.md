@@ -17,10 +17,21 @@
 | Сам TextTemplateBlock | [PNG](screenshots/text-template-dark.png) | [PNG](screenshots/text-template-light.png) |
 | Полная карточка происшествия | [PNG](screenshots/text-template-dark-window.png) | [PNG](screenshots/text-template-light-window.png) |
 
-![TextTemplateBlock, фактический захват QML](screenshots/text-template-dark.png)
+![TextTemplateBlock, фактический захват Windows Qt offscreen](screenshots/windows-text-template-dark.png)
 
 ## Проверка
 
 Локально **78 passed, 1 skipped**; пропущен только нативный Windows CF_HDROP. Пять новых GUI-проверок охватывают обе темы, ширину блока 320/560, взаимное положение подписи/поля/пресета, разные ширины полей, отсутствие обрезания коротких значений, многострочность и одну кнопку копирования. Попытка Ctrl+A, Backspace и Delete после фокусировки каждой подписи не меняет текст, снимок или значения события. Копирование по фактической кнопке даёт прежнюю точную сборку сообщения. Смешанные предложения и длинные подписи проверяются отдельно; прежние GUI-тесты пресетов, ввода и независимых событий сохранены.
 
 Smoke-test проходит 13 экранов/окон и восемь сервисных проверок без предупреждений QML. Целевые визуальные проверки: 1920×1080 и 1366×768, обе темы, дополнительно эффективный масштаб Qt 125%. Windows workflow также запускает прежние тесты и визуальные матрицы, затем проверяет собранный EXE. Системный DPI рабочего Windows и внешние приложения не заменяются offscreen-рендером.
+
+## Windows: итоговый проверенный вид
+
+[Успешная сборка 0.3.1](https://github.com/Cowlizabeth2/Oper2codex/actions/runs/40111540468), код `5efb4e5`: **79 passed**, исходный и собранный EXE проходят smoke-test без ошибок QML. Целевые снимки получены при 1920×1080/1366×768 и эффективном масштабе Qt 125%, в обеих темах, с Segoe UI. Проверка захвата дополнительно отклоняет неожиданный перенос стандартной подписи при достаточной ширине. После проверки снимков подтверждено, что «Обстоятельства:» целиком находится на одной строке.
+
+| Windows Qt offscreen, 1366×768 | Тёмная тема | Светлая тема |
+|---|---|---|
+| Сам TextTemplateBlock | [PNG](screenshots/windows-text-template-dark.png) | [PNG](screenshots/windows-text-template-light.png) |
+| Полная карточка происшествия | [PNG](screenshots/windows-text-template-dark-window.png) | [PNG](screenshots/windows-text-template-light-window.png) |
+
+Готовая программа находится в Artifacts → `OperationalCenter-Windows`, все снимки — в `UI-review`, результаты — в `build-diagnostics`.
