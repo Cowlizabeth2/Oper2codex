@@ -72,10 +72,10 @@ def parse_template(source, fields):
 
 def editor_token(definition, number, occupied=""):
     label = " ".join(definition.get("label", "Поле").split())[:32] or "Поле"
-    token = f"⟦{number} · {label}⟧"
+    token = f"[{number} · {label}]"
     while token in occupied:
         number += 1
-        token = f"⟦{number} · {label}⟧"
+        token = f"[{number} · {label}]"
     return token
 
 

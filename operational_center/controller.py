@@ -87,6 +87,8 @@ class Controller(QObject):
         _, before = self.store.config("draft")
         after = copy.deepcopy(before)
         mutation(after)
+        if after == before:
+            return
         self.store.save_draft(after)
         self.undo_stack.append(before)
         self.undo_stack = self.undo_stack[-100:]

@@ -174,7 +174,7 @@ ColumnLayout {
                             RowLayout { Layout.fillWidth: true
                                 Icon { name: tile.modelData.type; tint: tile.modelData.accent || Theme.accent }
                                 Label { text: tile.modelData.title; color: Theme.text; font.pixelSize: Theme.fontSize; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Label { text: "⠿"; color: Theme.muted; font.pixelSize: Theme.fontSize }
+                                Icon { name: "more"; rotation: 90 }
                             }
                             Label { text: ({text:"Шаблон",contacts:"Excel",documents:"Документы",reference:"Файлы"})[tile.modelData.type]+" · "+view.summary(tile.modelData); color: Theme.muted; font.pixelSize: Theme.smallSize; Layout.fillWidth: true; elide: Text.ElideRight }
                         }

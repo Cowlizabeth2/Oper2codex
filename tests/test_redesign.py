@@ -65,6 +65,7 @@ def test_group_geometry_is_atomic_undoable_and_clone_settings_independent(app,st
     items=[dict(id=i,x=120+n*400,y=80,width=360,height=280) for n,i in enumerate([a,b])]
     run(c,'geometry_batch',items=items)
     assert [i['x'] for i in c.state['master']['blocks']]==[120,520]
+    run(c,'geometry_batch',items=items)  # Selecting without moving must not consume Undo.
     run(c,'undo');assert c.state['master']==before
     run(c,'redo')
     valid=copy.deepcopy(c.state['master'])
@@ -244,7 +245,7 @@ def test_builder_ctrl_selection_group_drag_and_clickable_arrow(gui):
 def test_readable_editor_markers_roundtrip_without_persisting_aliases():
     from operational_center.domain import editor_template, parse_editor_template
     a,b=field('Перевозчик'),field('Перевозчик')
-    segments=[{'kind':'text','text':'Любой текст ⟦1 · Перевозчик⟧: '},a,{'kind':'text','text':' / '},b]
+    segments=[{'kind':'text','text':'Любой текст [1 · Перевозчик]: '},a,{'kind':'text','text':' / '},b]
     source,fields=editor_template(segments)
     assert a['id'] not in source and b['id'] not in source
     assert fields[0]['_editor_token']!=fields[1]['_editor_token']
