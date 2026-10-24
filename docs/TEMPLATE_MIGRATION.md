@@ -50,3 +50,14 @@ SQL-схема `user_version=1` и формат `segments` существуют 
 Нужна резервная копия реальной пользовательской `.sqlite`. Сначала — чтение и фиксация фактических структур/значений; затем — подтверждённый план для её неоднозначных записей, backup и проверка на отдельной копии. До этого ни происхождение именно пользовательского случая, ни результат его исправления не объявляются подтверждёнными.
 
 Локальная проверка: **92 passed, 1 skipped** (только нативный Windows CF_HDROP), включая девять тестов обновления/миграции и пять проверок идентификатора сборки. [Машинный отчёт проверки исторического файла](template-migration-local-report.json): backup integrity OK, ID старого события сохранён, новых событий 0, сообщение совпало посимвольно, повторное открытие обновлённой SQLite успешно.
+
+## Windows-проверка подготовки 0.3.2
+
+[Успешный прогон 40114856033](https://github.com/Cowlizabeth2/Oper2codex/actions/runs/40114856033): **93 passed**, собранный EXE прошёл 14 экранов/окон и девять сервисных проверок без ошибок QML. EXE сообщил полный SHA `d8cbb3eaacf4d738acdb9c3c53ebfbd042d5ebfa`; упаковщик сравнил его с SHA запуска Actions. [Отчёт обновления исторической SQLite на Windows](template-migration-windows-report.json) подтверждает ID прежнего события, ноль новых событий, посимвольную сохранность сообщения и повторное открытие файла. Проверка относится к зафиксированной исторической тестовой базе; `user_database_verified` остаётся `false`.
+
+| Историческая фикстура, Windows Qt offscreen / Segoe UI | До | После |
+|---|---|---|
+| Тёмная тема | [PNG](screenshots/windows-template-upgrade-before-dark.png) | [PNG](screenshots/windows-template-upgrade-after-dark.png) |
+| Светлая тема | [PNG](screenshots/windows-template-upgrade-before-light.png) | [PNG](screenshots/windows-template-upgrade-after-light.png) |
+
+Сборка диагностики: Artifacts → `OperationalCenter-Windows`. Снимки и отчёт: `UI-review/template-upgrade`. Выполнение запроса на реальной пользовательской базе остаётся открытым до её предоставления и проверки отдельной копии.
