@@ -145,7 +145,7 @@ class Store:
     def logs(self):
         return [dict(r) for r in self.db.execute("SELECT * FROM journal ORDER BY id DESC LIMIT 200")]
 
-    def backup(self, destination):
+    def backup(self, destination, *, source_connection=None):
         target = Path(destination)
         if target.resolve() == self.path.resolve():
             raise ValueError("Нельзя записать резервную копию поверх рабочей базы")
@@ -155,7 +155,7 @@ class Store:
             pass
         try:
             with closing(sqlite3.connect(target)) as db:
-                self.db.backup(db)
+                (source_connection or self.db).backup(db)
         except Exception:
             target.unlink(missing_ok=True)
             raise

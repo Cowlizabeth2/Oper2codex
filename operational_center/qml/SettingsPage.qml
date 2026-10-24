@@ -33,10 +33,16 @@ ScrollView {
                 ActionButton { text: "Импорт черновика…"; iconName: "plus"; onClicked: shell.chooseFile(function(path) { shell.confirm("Заменить черновик импортированной конфигурацией? Происшествия и опубликованные настройки сохранятся.",function() { shell.run("import",{path:path}) }) },["Конфигурация JSON (*.json)"]) }
             }
         }
+        Section { title: "Диагностика старых текстовых шаблонов"
+            Label { text: "Проверка читает черновик, опубликованные шаблоны и снимки происшествий. Преобразование выполняется только после просмотра выбранных записей; перед записью обязательно создаётся копия БД."; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.muted; font.pixelSize: Theme.fontSize }
+            ActionButton { objectName: "inspectTemplates"; text: "Проверить структуру шаблонов…"; iconName: "search"; onClicked: shell.inspectTemplates() }
+        }
         Section { title: "Копии для безопасного просмотра"; expanded: false
             Label { text: "Сначала закройте документы во внешних приложениях. Очистка удалит только временные копии, исходники сохранятся."; color: Theme.muted; font.pixelSize: Theme.fontSize; wrapMode: Text.Wrap; Layout.fillWidth: true }
             ActionButton { text: "Очистить копии просмотра…"; iconName: "trash"; danger: true; onClicked: shell.confirm("Удалить временные копии просмотра? Убедитесь, что они закрыты во внешних программах.",function() { shell.run("clear_previews") }) }
         }
-        Label { text: "Оперативный центр "+shell.state.version+" · "+shell.state.commit.slice(0,8); color: Theme.muted; font.pixelSize: Theme.smallSize }
+        Label { text: "Оперативный центр "+shell.state.version; color: Theme.muted; font.pixelSize: Theme.smallSize }
+        Label { text: "Полный SHA коммита сборки"; color: Theme.muted; font.pixelSize: Theme.smallSize }
+        TextEdit { objectName: "buildCommit"; text: shell.state.commit; readOnly: true; selectByMouse: true; wrapMode: TextEdit.WrapAnywhere; color: Theme.text; font.pixelSize: Theme.fontSize; Layout.fillWidth: true }
     }
 }

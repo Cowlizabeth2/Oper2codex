@@ -17,7 +17,7 @@ from .domain import (new_master, new_block, uid, duplicate_master, validate_conf
                      editor_template, editor_token, parse_editor_template)
 from .files import DocumentService, ReferenceService, scan, atomic_copy
 from .theme import theme, ThemeManager
-from . import catalog, scenario_import
+from . import catalog, scenario_import, template_migration
 from .static_text import presentation
 
 log = logging.getLogger(__name__)
@@ -41,6 +41,10 @@ class Controller(QObject):
         self.block_clipboard = []
         self.import_proposal = None
         self.import_token = ""
+        self.template_diagnostics = None
+        self.template_plan = None
+        self.template_plan_token = ""
+        self.template_migration_result = None
         self.active = next((e["id"] for e in store.events() if e["visible"] and not e["archived"]), "")
         self.selected_master = store.config("draft")[1]["masters"][0]["id"] if store.config("draft")[1]["masters"] else ""
         self.selected_block = ""
@@ -84,6 +88,9 @@ class Controller(QObject):
                   "logs": self.store.logs(), "dataDir": str(self.data_dir),
                   "catalogFavorites": self.store.pref("catalog_favorites", []),
                   "catalogRecent": self.store.pref("catalog_recent", []),
+                  "templateDiagnostics": self.template_diagnostics,
+                  "templateMigration": ({'rows':self.template_plan['rows'],'token':self.template_plan_token} if self.template_plan else None),
+                  "templateMigrationResult": self.template_migration_result,
                   "importPreview": ({k: v for k, v in self.import_proposal.items() if k != "masters"} | {"token": self.import_token}) if self.import_proposal else None}
         if selected and selected["type"] == "text":
             result["templateSource"], result["templateFields"] = editor_template(selected["config"]["segments"])
@@ -123,7 +130,7 @@ class Controller(QObject):
                 self.stateChanged.emit()
             return True
         except Exception as exc:
-            if action == "preview_scenarios":
+            if action in {"preview_scenarios", "preview_template_migration"}:
                 self.stateChanged.emit()
             log.exception("Операция %s не выполнена", action)
             with self.store.db:
@@ -132,7 +139,29 @@ class Controller(QObject):
             return False
 
     def _command(self, action, a):
-        if action in {"create_event", "launch_catalog"}:
+        if action == 'inspect_templates':
+            self.template_diagnostics = template_migration.inspect(self.store)
+            self.template_plan = None
+            self.template_plan_token = ''
+            self.template_migration_result = None
+        elif action == 'preview_template_migration':
+            self.template_plan = None
+            self.template_plan_token = ''
+            self.template_plan = template_migration.prepare(self.store,a['block_id'],a['field_id'],a['prefix'])
+            self.template_plan_token = uid()
+        elif action == 'cancel_template_migration':
+            self.template_plan = None
+            self.template_plan_token = ''
+        elif action == 'apply_template_migration':
+            if not self.template_plan or a.get('token')!=self.template_plan_token:
+                raise ValueError('Повторите предпросмотр преобразования шаблона')
+            self.template_migration_result = template_migration.apply(self.store,self.template_plan,a.get('selected',[]),a.get('confirmed'))
+            self.template_plan = None
+            self.template_plan_token = ''
+            self.undo_stack.clear(); self.redo_stack.clear()
+            self.template_diagnostics = template_migration.inspect(self.store)
+            self.notice.emit('Преобразование подтверждённых записей завершено. Резервная копия: '+self.template_migration_result['backup'])
+        elif action in {"create_event", "launch_catalog"}:
             if action == "launch_catalog" and a.get("catalog"):
                 _, config = self.store.config()
                 selected = next(c for c in config.get("catalogs", []) if c["id"] == a["catalog"])

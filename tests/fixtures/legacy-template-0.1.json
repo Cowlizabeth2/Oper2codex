@@ -1,0 +1,12 @@
+{
+  "master_id": "248232a8-2155-4d5b-a0f3-4efdff1c865d",
+  "block_id": "5545e3a9-db89-47ed-9be1-d38d45a4c6b6",
+  "field_id": "ccf003cc-1679-4c6e-910e-c778af251d1d",
+  "other_field_id": "27608867-0eef-4a60-a118-75afab3b5de6",
+  "event_full": "8da82e9f-4faa-4bf7-b770-876b18ca8a6b",
+  "event_value_only": "205da984-3354-45de-8778-6bda6032b991",
+  "source_commit": "4674b65a4614d623350cbca109a92c32e0e5f736",
+  "sql_sha256": "d454e90d5e8cfff6904ec107450ebd68d95ed512c1bbc4e201f5d7fcde90d78e",
+  "synthetic": true,
+  "method": "0.1 Controller.insertField selected labels, saveTemplate, publish, create_event and setValue; SQLite iterdump"
+}

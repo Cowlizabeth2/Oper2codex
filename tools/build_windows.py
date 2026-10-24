@@ -1,6 +1,7 @@
 """Build and smoke-test a standalone Windows folder, then create one artifact ZIP."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -15,12 +16,21 @@ def checked_run(command, logfile, timeout=None):
     result.check_returncode()
 
 
+def resolve_commit(root):
+    commit=os.environ.get('GITHUB_SHA')
+    if not commit:
+        commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+    if not re.fullmatch(r'[0-9a-fA-F]{40}',commit):
+        raise ValueError('Для сборки требуется полный 40-символьный SHA коммита')
+    return commit
+
+
 def build():
     if sys.platform != "win32":
         raise SystemExit("Windows packaging must run on Windows")
     root = Path(__file__).resolve().parents[1]
     os.chdir(root)
-    commit = os.environ.get("GITHUB_SHA", "local")
+    commit = resolve_commit(root)
     (root / "artifacts").mkdir(exist_ok=True)
     (root / "operational_center" / "build.json").write_text(json.dumps({"commit": commit}), encoding="utf-8")
     checked_run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "OperationalCenter",
@@ -31,7 +41,7 @@ def build():
     report.parent.mkdir(exist_ok=True)
     checked_run([str(folder / "OperationalCenter.exe"), "--smoke-test", "--smoke-report", str(report)], root / "artifacts" / "packaged-output.txt", timeout=60)
     result = json.loads(report.read_text(encoding="utf-8"))
-    if not result["ok"] or len(result["checks"]) != 13 or len(result.get("service_checks", [])) != 8 or result["qml_errors"]:
+    if not result["ok"] or len(result["checks"]) != 14 or len(result.get("service_checks", [])) != 9 or result["qml_errors"] or result.get('commit') != commit:
         raise RuntimeError("Packaged application failed functional QML smoke-test")
     scripts = {
         "ЗАПУСТИТЬ.bat": '@echo off\r\ncd /d "%~dp0"\r\nstart "" "OperationalCenter.exe"\r\n',

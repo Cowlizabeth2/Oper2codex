@@ -31,7 +31,7 @@ ApplicationWindow {
     property var fileCallback: function(path) {}
     property var folderCallback: function(path) {}
     property alias activePage: pages.item
-    property bool catalogModal: catalogSearch.visible || catalogManager.visible || scenarioImport.visible
+    property bool catalogModal: catalogSearch.visible || catalogManager.visible || scenarioImport.visible || templateMigration.visible
     function run(action, args) { return backend.command(action, JSON.stringify(args || {})) }
     function confirm(text, callback) { confirmationText.text = text; pendingAction = callback; confirmation.open() }
     function chooseFile(callback, filters, save) { fileCallback = callback; filePicker.nameFilters = filters || ["Все файлы (*)"]; filePicker.fileMode = save ? FileDialog.SaveFile : FileDialog.OpenFile; filePicker.open() }
@@ -40,14 +40,16 @@ ApplicationWindow {
     function openAllScenarios() { openCatalog({id:"",name:"Все сценарии",opening:"compact",members:[]}) }
     function manageCatalogs() { catalogManager.open() }
     function importScenarios() { scenarioImport.open() }
+    function inspectTemplates() { if(run("inspect_templates")) templateMigration.open() }
     CatalogSearch { id: catalogSearch; shell: window }
     CatalogManager { id: catalogManager; shell: window }
     ScenarioImport { id: scenarioImport; shell: window }
+    TemplateMigration { id: templateMigration; shell: window }
     function titleForPage() { return page === "events" && state.event ? state.event.name + " №" + state.event.number : ({home:"Главная",events:"Происшествия",history:"История",builder:"Конструктор",settings:"Настройки",logs:"Журнал"})[page] }
     FileDialog { id: filePicker; onAccepted: window.fileCallback(backend.localPath(selectedFile.toString())) }
     FolderDialog { id: folderPicker; onAccepted: window.folderCallback(backend.localPath(selectedFolder.toString())) }
     Dialog { id: confirmation; objectName: "confirmationDialog"; title: "Подтверждение"; anchors.centerIn: parent; width: Math.min(Theme.px(520),window.width-Theme.s32); modal: true; standardButtons: Dialog.Ok | Dialog.Cancel; contentItem: Label { id: confirmationText; wrapMode: Text.Wrap; color: Theme.text; font.pixelSize: Theme.fontSize } onAccepted: window.pendingAction() }
-    Dialog { id: notification; title: "Оперативный центр"; anchors.centerIn: parent; width: Math.min(Theme.px(560),window.width-Theme.s32); standardButtons: Dialog.Ok; contentItem: Label { id: notificationText; wrapMode: Text.Wrap; color: Theme.text; font.pixelSize: Theme.fontSize } }
+    Dialog { id: notification; objectName: "notificationDialog"; title: "Оперативный центр"; anchors.centerIn: parent; width: Math.min(Theme.px(560),window.width-Theme.s32); standardButtons: Dialog.Ok; contentItem: Label { id: notificationText; wrapMode: Text.Wrap; color: Theme.text; font.pixelSize: Theme.fontSize } }
     Connections { target: backend; function onNotice(message) { notificationText.text = message; notification.open() } }
     Shortcut { sequences: [StandardKey.Undo]; enabled: page === "builder" && !window.editingText && !window.catalogModal; onActivated: window.run("undo") }
     Shortcut { sequences: [StandardKey.Redo]; enabled: page === "builder" && !window.editingText && !window.catalogModal; onActivated: window.run("redo") }

@@ -1,0 +1,37 @@
+{
+  "source": "committed synthetic historical 0.1 SQLite dump",
+  "user_database_verified": false,
+  "source_commit": "4674b65a4614d623350cbca109a92c32e0e5f736",
+  "sql_sha256": "d454e90d5e8cfff6904ec107450ebd68d95ed512c1bbc4e201f5d7fcde90d78e",
+  "qml_errors": [],
+  "steps": [
+    {
+      "field_id": "ccf003cc-1679-4c6e-910e-c778af251d1d",
+      "records": 3,
+      "ambiguous_not_selected": 1
+    },
+    {
+      "field_id": "27608867-0eef-4a60-a118-75afab3b5de6",
+      "records": 3,
+      "ambiguous_not_selected": 1
+    }
+  ],
+  "backups": [
+    {
+      "created_before_write": true,
+      "integrity": "ok"
+    },
+    {
+      "created_before_write": true,
+      "integrity": "ok"
+    }
+  ],
+  "platform": "offscreen",
+  "resolved_font": "DejaVu Sans",
+  "ok": true,
+  "existing_event_id_preserved": true,
+  "events_created_during_upgrade": 0,
+  "exact_message_preserved": true,
+  "restart_verified": true,
+  "commit": "development"
+}

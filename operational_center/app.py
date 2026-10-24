@@ -69,6 +69,7 @@ def main(argv=None):
     try:
         build_file = Path(__file__).parent / "build.json"
         commit = json.loads(build_file.read_text(encoding="utf-8")).get("commit", "development") if build_file.exists() else "development"
+        result['commit'] = commit
         logging.info("Оперативный центр %s, build %s; data=%s", __version__, commit, data_dir)
         store = Store(data_dir / "operational-center.sqlite")
         backend = Controller(store, data_dir, commit)
@@ -131,23 +132,29 @@ def main(argv=None):
             if not backend.command("preview_scenarios", json.dumps({"path":sample_path})) or backend.state["importPreview"]["valid"] != 1:
                 raise RuntimeError("Smoke: предварительная проверка сценариев не работает")
             result["service_checks"].extend(["static_text", "catalog_search_launch", "scenario_import_preview"])
+            if not backend.command('inspect_templates','{}') or not backend.state['templateDiagnostics']['candidates']:
+                raise RuntimeError('Smoke: диагностика сохранённых шаблонов недоступна')
+            result['service_checks'].append('template_migration_inspection')
             backend.command("select_block", json.dumps({"id": blocks[0]["id"]}))
             smoke_steps = [("events", "text"), ("builder", "text"), ("builder", "contacts"), ("builder", "documents"), ("builder", "reference"), ("builder", "static_text"), ("history", "reference"), ("settings", "reference"), ("logs", "reference"), ("home", "reference"), ("catalog", "search"), ("catalog", "manager"), ("catalog", "import")]
+            smoke_steps.append(('migration','review'))
             QTimer.singleShot(15000, lambda: app.exit(3))
 
         def smoke_next():
             if smoke_steps:
                 page, kind = smoke_steps.pop(0)
-                for name in ("catalogSearchDialog", "catalogManagerDialog", "scenarioImportDialog"):
+                for name in ("catalogSearchDialog", "catalogManagerDialog", "scenarioImportDialog", "templateMigrationDialog"):
                     popup = root.findChild(QObject, name)
                     if popup and popup.property("visible"):
                         QMetaObject.invokeMethod(popup, "close", Qt.DirectConnection)
                 if page == "catalog":
                     QMetaObject.invokeMethod(root, {"search":"openAllScenarios", "manager":"manageCatalogs", "import":"importScenarios"}[kind], Qt.DirectConnection)
+                if page == 'migration':
+                    QMetaObject.invokeMethod(root,'inspectTemplates',Qt.DirectConnection)
                 if page == "builder":
                     block = next(b for b in blocks if b["type"] == kind)
                     backend.command("select_block", json.dumps({"id": block["id"]}))
-                if page != "catalog":
+                if page not in {'catalog','migration'}:
                     root.setProperty("page", page)
                 result["checks"].append(page + ":" + kind)
                 QTimer.singleShot(150, smoke_next)
